@@ -1,7 +1,10 @@
+"""
+Copyright (C) 2021 Microsoft Corporation
+"""
 class Args:
-    lr=1e-5
+    lr=5e-5
     lr_backbone=1e-5
-    batch_size=5
+    batch_size=2
     weight_decay=1e-4
     epochs=20
     lr_drop=1
