@@ -11,6 +11,7 @@ dataset before going forward.
 Create a conda environment from the yml file and activate it as follows
 
 > conda env create -f environment.yml
+
 > conda activate tables-detr
 
 ## Training
@@ -24,7 +25,9 @@ For Detailed description, please refer to the paper.
 Sample training commands look like the below:
 
 > cd src
+
 > python main.py --data_root_dir /path/to/detection --data_type detection
+
 > python main.py --data_root_dir /path/to/structure --data_type structure
 
 ## GriTS metric evaluation
