@@ -1,3 +1,6 @@
+"""
+Copyright (C) 2021 Microsoft Corporation
+"""
 import random
 import torch
 import math

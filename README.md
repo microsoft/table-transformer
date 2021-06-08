@@ -1,14 +1,41 @@
-# Project
+# Table Transformer
 
-> This repo has been populated by an initial template to help get you started. Please
-> make sure to update the content to build a great experience for community-building.
+This repository contains training and evaluation code for table extraction. We
+perform the experiments on PubTables1M. The code adopts DETR and provides
+supporting training code. In addition to the training code, we also provide the
+code to evaluate GriTS metrics proposed in the paper. Please download the
+[PubTables1M](https://pubtables1m.blob.core.windows.net/pubtables1m/README)
+dataset before going forward.
 
-As the maintainer of this project, please make a few updates:
+## Installation
+Create a conda environment from the yml file and activate it as follows
 
-- Improving this README.MD file to provide a great experience
-- Updating SUPPORT.MD with content about this project's support experience
-- Understanding the security reporting process in SECURITY.MD
-- Remove this section from the README
+> conda env create -f environment.yml
+> conda activate tables-detr
+
+## Training
+There's 2 tasks in this dataset.
+
+1. Table Detection: Detecting tables in pdf page images
+2. Table Structure Recognition: Detection of table structures
+
+For Detailed description, please refer to the paper.
+
+Sample training commands look like the below:
+
+> cd src
+> python main.py --data_root_dir /path/to/detection --data_type detection
+> python main.py --data_root_dir /path/to/structure --data_type structure
+
+## GriTS metric evaluation
+GriTS metrics proposed in the paper can be evaluated once you have trained a
+model. We consider the model trained in the previous step. This script
+calculates all 4 variations presented in the paper. Based on the model, one can
+tune which variation to use. The table words dir path is not required for all
+variations but we use it in our case as PubTables1M contains this information.
+
+> python grits.py --data_root_dir /path/to/structure --model_load_path /path/to/model --table_words_dir /path/to/table/words
+
 
 ## Contributing
 

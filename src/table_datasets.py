@@ -1,3 +1,6 @@
+"""
+Copyright (C) 2021 Microsoft Corporation
+"""
 import os
 import sys
 import random
@@ -98,8 +101,8 @@ class TightAnnotationCrop(object):
             right = random.randint(0, self.right_max_pad)
             bottom = random.randint(0, self.bottom_max_pad)
             bbox = bboxes[object_num].tolist()
-            target["crop_orig_size"] = torch.tensor([bbox[3]-bbox[1]+y_margin*2, bbox[2]-bbox[0]+x_margin*2])
-            target["crop_orig_offset"] = torch.tensor([bbox[0]-x_margin, bbox[1]-y_margin])
+            #target["crop_orig_size"] = torch.tensor([bbox[3]-bbox[1]+y_margin*2, bbox[2]-bbox[0]+x_margin*2])
+            #target["crop_orig_offset"] = torch.tensor([bbox[0]-x_margin, bbox[1]-y_margin])
             region = [bbox[0], bbox[1], bbox[2]-bbox[0], bbox[3]-bbox[1]]
             # transpose and add margin
             region = [region[1]-top, region[0]-left, region[3]+top+bottom, region[2]+left+right]

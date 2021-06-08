@@ -1,3 +1,6 @@
+"""
+Copyright (C) 2021 Microsoft Corporation
+"""
 import os
 import argparse
 from datetime import datetime
@@ -21,7 +24,7 @@ def get_args():
     parser = argparse.ArgumentParser()
     
     parser.add_argument('--data_root_dir', help="Root data directory for images and labels")
-    parser.add_argument('--backbone', default='resnet101', help="Backbone for the model")
+    parser.add_argument('--backbone', default='resnet18', help="Backbone for the model")
     parser.add_argument('--data_type', choices=['detection', 'structure'], default='structure',
                         help="toggle between structure recognition and table detection")
 

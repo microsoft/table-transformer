@@ -1,3 +1,6 @@
+"""
+Copyright (C) 2021 Microsoft Corporation
+"""
 import os
 import argparse
 import sys
@@ -39,11 +42,10 @@ def get_args():
     parser = argparse.ArgumentParser()
     
     parser.add_argument('--data_root_dir', help="Root data directory for images and labels")
-    parser.add_argument('--model_load_path', help="The folder name containing the xml files")
+    parser.add_argument('--model_load_path', help="The path to trained model")
     parser.add_argument('--table_words_dir', help="Folder containg the bboxes of table words")
 
     return parser.parse_args()
-
 
 
 def transpose(matrix):
@@ -155,7 +157,7 @@ def align_1d(sequence1, sequence2, reward_function, return_alignment=False):
     return aligned_sequence1_indices, aligned_sequence2_indices, score
 
 
-def objects_to_cells(bboxes, labels, scores, page_tokens, structure_class_names, structure_class_thresholds):
+def objects_to_cells(bboxes, labels, scores, page_tokens, structure_class_names, structure_class_thresholds, structure_class_map):
     table_objects = []
     for bbox, score, label in zip(bboxes, scores, labels):
         table_objects.append({'bbox': bbox, 'score': score, 'label': label})
@@ -449,347 +451,273 @@ def plot_graph(metric_1, metric_2, metric_1_name, metric_2_name):
     plt.gcf().set_size_inches((8, 8))
     plt.show()
 
-
-args = Args
-cmd_args = get_args()
-debug = False
-
-
-device = torch.device(args.device)
-model, criterion, postprocessors = build_model(args)
-model.to(device)
-
-
-data_parent_directory = cmd_args.data_root_dir
-model_load_path = cmd_args.model_load_path
-table_words_data_directory = cmd_args.table_words_dir
-
-# Model loading code that works even if the loaded model doesn't exactly match the one we just created
-loaded_state_dict = torch.load(model_load_path, map_location=device)
-model_state_dict = model.state_dict()
-pretrained_dict = {k: v for k, v in loaded_state_dict.items() if k in model_state_dict and model_state_dict[k].shape == v.shape}
-model_state_dict.update(pretrained_dict)
-model.load_state_dict(model_state_dict, strict=True)
-
-
-
-class_map = {'table': 0, 'table column': 1, 'table row': 2, 'table column header': 3, 'table projected row header': 4, 'table spanning cell': 5, 'no object': 6}
-class_list = list(class_map)
-class_set = set(class_map.values())#.remove('no object')
-class_set.remove(class_map['no object'])
-# ### Table-specific metrics evaluation
-
-dataset_test = PDFTablesDataset(os.path.join(data_parent_directory, "test"), RandomMaxResize(1000, 1000),
-                               include_original=True, make_coco=False, image_extension=".jpg",
-                                xml_fileset="100_objects_filelist.txt", class_list=class_list, class_set=class_set, class_map=class_map)
-data_loader_test = torch.utils.data.DataLoader(
-    dataset_test, batch_size=1, shuffle=True, num_workers=1,
-    collate_fn=utils.collate_fn)
-
-
-
-
-structure_class_names = [
-        'table', 'table column', 'table row', 'table column header', 'table projected row header', 'table spanning cell', 'no object'
-]
-structure_class_map = {k: v for v, k in enumerate(structure_class_names)}
-structure_class_thresholds = {
-        "table": 0.5, "table column": 0.5, "table row": 0.5, "table column header": 0.5, "table projected row header": 0.5,
-        "table spanning cell": 0.5, "no object": 10
-}
-
-if debug:
-    max_samples = 50
-else:
-    max_samples = len(dataset_test)
-print(max_samples)
-
-
-normalize = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-])
-
-
-
-model.eval()
-
-simple_results = []
-complicated_results = []
-st_time = datetime.now()
-t1 = st_time
-t2 = st_time
-t3 = st_time
-t4 = st_time
-t5 = st_time
-
-for idx in range(10):
-    print(idx)
+def main():
+    debug = False
+    cmd_args = get_args().__dict__
+    args = Args
+    for key in cmd_args:
+        val = cmd_args[key]
+        setattr(args, key, val)
+    print(args.__dict__)
     
-    #---Read source data: image, objects, and word bounding boxes
-    curr_time = datetime.now()
-    img, gt, orig_img, img_path = dataset_test[idx]
-    img_filename = img_path.split("/")[-1]
-    img_words_filepath = os.path.join(table_words_data_directory, img_filename.replace(".jpg", "_words.json"))
-    with open(img_words_filepath, 'r') as f:
-        page_tokens = json.load(f)
-    img_test = img
-    scale = 1000 / max(orig_img.size)
-    img = normalize(img)
-    for word in page_tokens:
-        word['bbox'] = [elem * scale for elem in word['bbox']]
-    t1 += datetime.now() - curr_time
+    device = torch.device(args.device)
+    model, criterion, postprocessors = build_model(args)
+    model.to(device)
     
-    #---Compute ground truth features
-    curr_time = datetime.now()
+    # Model loading code that works even if the loaded model doesn't exactly match the one we just created
+    loaded_state_dict = torch.load(args.model_load_path, map_location=device)
+    model_state_dict = model.state_dict()
+    pretrained_dict = {k: v for k, v in loaded_state_dict.items() if k in model_state_dict and model_state_dict[k].shape == v.shape}
+    model_state_dict.update(pretrained_dict)
+    model.load_state_dict(model_state_dict, strict=True)
     
-    true_bboxes = [list(elem) for elem in gt['boxes'].cpu().numpy()]
-    true_labels = gt['labels'].cpu().numpy()
-    true_scores = [1 for elem in true_bboxes]
-    true_cell_dilatedbbox_grid = np.array(output_to_dilatedbbox_grid(true_bboxes, true_labels, true_scores))
-    true_table_structures, true_cells, true_confidence_score = objects_to_cells(true_bboxes, true_labels, true_scores,
-                                                                                page_tokens, structure_class_names,
-                                                                                structure_class_thresholds)
-    true_relspan_grid = np.array(cells_to_relspan_grid(true_cells))
-    true_bbox_grid = np.array(cells_to_grid(true_cells, key='bbox'))
-    true_text_grid = np.array(cells_to_grid(true_cells, key='cell_text'), dtype=object)
-    t2 += datetime.now() - curr_time
     
-    #---Compute predicted features
-    # Propagate through the model
-    curr_time = datetime.now()
-    with torch.no_grad():
-        outputs = model([img.to(device)])
-    boxes = outputs['pred_boxes']
-    m = outputs['pred_logits'].softmax(-1).max(-1)
-    scores = m.values
-    labels = m.indices
-    rescaled_bboxes = rescale_bboxes(torch.tensor(boxes[0], dtype=torch.float32), img_test.size)
-    pred_bboxes = [bbox.tolist() for bbox in rescaled_bboxes]
-    pred_labels = labels[0].tolist()
-    pred_scores = scores[0].tolist()
+    class_map = {'table': 0, 'table column': 1, 'table row': 2, 'table column header': 3, 'table projected row header': 4, 'table spanning cell': 5, 'no object': 6}
+    class_list = list(class_map)
+    class_set = set(class_map.values())
+    class_set.remove(class_map['no object'])
+
+    # Loading data
+    dataset_test = PDFTablesDataset(os.path.join(args.data_root_dir, "test"), RandomMaxResize(1000, 1000),
+                                   include_original=True, make_coco=False, image_extension=".jpg",
+                                    xml_fileset="100_objects_filelist.txt", class_list=class_list, class_set=class_set, class_map=class_map)
+    data_loader_test = torch.utils.data.DataLoader(
+        dataset_test, batch_size=1, shuffle=True, num_workers=1,
+        collate_fn=utils.collate_fn)
     
-    pred_bboxes, pred_scores, pred_labels = eval_utils.apply_class_thresholds(pred_bboxes, pred_labels, pred_scores,
-                                            structure_class_names,
-                                            structure_class_thresholds)
-    pred_cell_dilatedbbox_grid = np.array(output_to_dilatedbbox_grid(pred_bboxes, pred_labels, pred_scores))
-    pred_table_structures, pred_cells, pred_confidence_score = objects_to_cells(pred_bboxes, pred_labels, pred_scores,
-                                                                                page_tokens, structure_class_names,
-                                                                                structure_class_thresholds)
-    pred_relspan_grid = np.array(cells_to_relspan_grid(pred_cells))
-    pred_bbox_grid = np.array(cells_to_grid(pred_cells, key='bbox'))
-    pred_text_grid = np.array(cells_to_grid(pred_cells, key='cell_text'), dtype=object)
-    t3 += datetime.now() - curr_time
+    structure_class_names = [
+            'table', 'table column', 'table row', 'table column header', 'table projected row header', 'table spanning cell', 'no object'
+    ]
+    structure_class_map = {k: v for v, k in enumerate(structure_class_names)}
+    structure_class_thresholds = {
+            "table": 0.5, "table column": 0.5, "table row": 0.5, "table column header": 0.5, "table projected row header": 0.5,
+            "table spanning cell": 0.5, "no object": 10
+    }
     
-    #---Compute each of the metrics
-    curr_time = datetime.now()
-    combined_dilatedbbox_score, row_dilatedbbox_score, column_dilatedbbox_score = factored_2dlcs(true_cell_dilatedbbox_grid, pred_cell_dilatedbbox_grid, reward_function=eval_utils.iou)
-    combined_relspan_score, row_relspan_score, column_relspan_score = factored_2dlcs(true_relspan_grid, pred_relspan_grid, reward_function=eval_utils.iou)
-    combined_iou_score, row_iou_score, column_iou_score = factored_2dlcs(true_bbox_grid, pred_bbox_grid, reward_function=eval_utils.iou)
-    combined_lcs_score, row_lcs_score, column_lcs_score = factored_2dlcs(true_text_grid, pred_text_grid, reward_function=make_align1d_reward_function(lambda x, y: 1 if x == y else 0))
-    t4 += datetime.now() - curr_time
-    
-    #---Collect results
-    curr_time = datetime.now()
-    result = (combined_dilatedbbox_score, combined_relspan_score, combined_iou_score, combined_lcs_score)
-    if 4 in true_labels or 5 in true_labels:
-        complicated_results.append(result)
-    else:
-        simple_results.append(result)
-    t5 += datetime.now() - curr_time
-    
-    #---Display output for debugging
     if debug:
-        print("TabS-RawIoU: {}; row-first: {}, column-first: {}".format(combined_dilatedbbox_score, row_dilatedbbox_score, column_dilatedbbox_score))
-        print("TabS-RelSpan: {}; row-first: {}, column-first: {}".format(combined_relspan_score, row_relspan_score, column_relspan_score))
-        print("TabS-IoU: {}; row-first: {}, column-first: {}".format(combined_iou_score, row_iou_score, column_iou_score))
-        print("TabS-Text: {}; row-first: {}, column-first: {}".format(combined_lcs_score, row_lcs_score, column_lcs_score))        
-        
-        fig,ax = plt.subplots(1)
-        ax.imshow(img_test, interpolation='lanczos')
-
-        linewidth = 1
-        alpha = 0
-        for word in page_tokens:
-            bbox = word['bbox']
-            rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                     edgecolor='none',facecolor="orange", alpha=0.04)
-            ax.add_patch(rect)
-            rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                     edgecolor="orange",facecolor='none',linestyle="--")
-            ax.add_patch(rect)         
-        rescaled_bboxes = rescale_bboxes(torch.tensor(boxes[0], dtype=torch.float32), img_test.size)
-        for bbox, label, score in zip(rescaled_bboxes, labels[0].tolist(), scores[0].tolist()):
-            bbox = bbox.cpu().numpy().tolist()
-            if not label > 5 and score > 0.3:
-                color, alpha, linewidth = get_bbox_decorations(label, score)
-                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=linewidth, 
-                                         edgecolor='none',facecolor=color, alpha=alpha)
-                ax.add_patch(rect)
-                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=linewidth, 
-                                         edgecolor=color,facecolor='none',linestyle="--")
-                ax.add_patch(rect) 
-
-        fig.set_size_inches((15, 18))
-        plt.show()
-        
-        fig,ax = plt.subplots(1)
-        ax.imshow(img_test, interpolation='lanczos')    
-        for cell in true_cells:
-            bbox = cell['bbox']
-            rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                     edgecolor='none',facecolor="brown", alpha=0.04)
-            ax.add_patch(rect)
-            rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                     edgecolor="brown",facecolor='none',linestyle="--")
-            ax.add_patch(rect) 
-            cell_rect = Rect()
-            for span in cell['spans']:
-                bbox = span['bbox']
-                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                         edgecolor='none',facecolor="green", alpha=0.2)
-                ax.add_patch(rect)
-                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                         edgecolor="green",facecolor='none',linestyle="--")
-                ax.add_patch(rect) 
-                cell_rect.includeRect(bbox)
-            if cell_rect.getArea() > 0:
-                bbox = list(cell_rect)
-                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                         edgecolor='none',facecolor="red", alpha=0.15)
-                ax.add_patch(rect)
-                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                         edgecolor="red",facecolor='none',linestyle="--")
-                ax.add_patch(rect)
-
-        fig.set_size_inches((15, 18))
-        plt.show()
-        
-        fig,ax = plt.subplots(1)
-        ax.imshow(img_test, interpolation='lanczos')
-
-        for cell in pred_cells:
-            bbox = cell['bbox']
-            rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                     edgecolor='none',facecolor="magenta", alpha=0.15)
-            ax.add_patch(rect)
-            rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                     edgecolor="magenta",facecolor='none',linestyle="--")
-            ax.add_patch(rect) 
-            cell_rect = Rect()
-            for span in cell['spans']:
-                bbox = span['bbox']
-                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                         edgecolor='none',facecolor="green", alpha=0.2)
-                ax.add_patch(rect)
-                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                         edgecolor="green",facecolor='none',linestyle="--")
-                ax.add_patch(rect) 
-                cell_rect.includeRect(bbox)
-            if cell_rect.getArea() > 0:
-                bbox = list(cell_rect)
-                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                         edgecolor='none',facecolor="red", alpha=0.15)
-                ax.add_patch(rect)
-                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                         edgecolor="red",facecolor='none',linestyle="--")
-                ax.add_patch(rect) 
-
-        fig.set_size_inches((15, 18))
-        plt.show()
-    if idx%1000 == 0:
+        max_samples = 50
+    else:
+        max_samples = len(dataset_test)
+    print(max_samples)
+    
+    
+    normalize = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
+    
+    
+    
+    model.eval()
+    
+    simple_results = []
+    complicated_results = []
+    st_time = datetime.now()
+    
+    for idx in range(max_samples):
         print(idx)
-        print(datetime.now() - st_time)
         
-print(datetime.now() - st_time)
-t1 -= st_time
-t2 -= st_time
-t3 -= st_time
-t4 -= st_time
-t5 -= st_time
-print(t1)
-print(t2)
-print(t3)
-print(t4)
-print(t5)
+        #---Read source data: image, objects, and word bounding boxes
+        curr_time = datetime.now()
+        img, gt, orig_img, img_path = dataset_test[idx]
+        img_filename = img_path.split("/")[-1]
+        img_words_filepath = os.path.join(args.table_words_dir, img_filename.replace(".jpg", "_words.json"))
+        with open(img_words_filepath, 'r') as f:
+            page_tokens = json.load(f)
+        img_test = img
+        scale = 1000 / max(orig_img.size)
+        img = normalize(img)
+        for word in page_tokens:
+            word['bbox'] = [elem * scale for elem in word['bbox']]
+        
+        #---Compute ground truth features
+        curr_time = datetime.now()
+        
+        true_bboxes = [list(elem) for elem in gt['boxes'].cpu().numpy()]
+        true_labels = gt['labels'].cpu().numpy()
+        true_scores = [1 for elem in true_bboxes]
+        true_cell_dilatedbbox_grid = np.array(output_to_dilatedbbox_grid(true_bboxes, true_labels, true_scores))
+        true_table_structures, true_cells, true_confidence_score = objects_to_cells(true_bboxes, true_labels, true_scores,
+                                                                                    page_tokens, structure_class_names,
+                                                                                    structure_class_thresholds,
+                                                                                    structure_class_map)
+        true_relspan_grid = np.array(cells_to_relspan_grid(true_cells))
+        true_bbox_grid = np.array(cells_to_grid(true_cells, key='bbox'))
+        true_text_grid = np.array(cells_to_grid(true_cells, key='cell_text'), dtype=object)
+        
+        #---Compute predicted features
+        # Propagate through the model
+        curr_time = datetime.now()
+        with torch.no_grad():
+            outputs = model([img.to(device)])
+        boxes = outputs['pred_boxes']
+        m = outputs['pred_logits'].softmax(-1).max(-1)
+        scores = m.values
+        labels = m.indices
+        rescaled_bboxes = rescale_bboxes(torch.tensor(boxes[0], dtype=torch.float32), img_test.size)
+        pred_bboxes = [bbox.tolist() for bbox in rescaled_bboxes]
+        pred_labels = labels[0].tolist()
+        pred_scores = scores[0].tolist()
+        
+        pred_bboxes, pred_scores, pred_labels = eval_utils.apply_class_thresholds(pred_bboxes, pred_labels, pred_scores,
+                                                structure_class_names,
+                                                structure_class_thresholds)
+        pred_cell_dilatedbbox_grid = np.array(output_to_dilatedbbox_grid(pred_bboxes, pred_labels, pred_scores))
+        pred_table_structures, pred_cells, pred_confidence_score = objects_to_cells(pred_bboxes, pred_labels, pred_scores,
+                                                                                    page_tokens, structure_class_names,
+                                                                                    structure_class_thresholds,
+                                                                                    structure_class_map)
+        pred_relspan_grid = np.array(cells_to_relspan_grid(pred_cells))
+        pred_bbox_grid = np.array(cells_to_grid(pred_cells, key='bbox'))
+        pred_text_grid = np.array(cells_to_grid(pred_cells, key='cell_text'), dtype=object)
+        
+        #---Compute each of the metrics
+        curr_time = datetime.now()
+        combined_dilatedbbox_score, row_dilatedbbox_score, column_dilatedbbox_score = factored_2dlcs(true_cell_dilatedbbox_grid, pred_cell_dilatedbbox_grid, reward_function=eval_utils.iou)
+        combined_relspan_score, row_relspan_score, column_relspan_score = factored_2dlcs(true_relspan_grid, pred_relspan_grid, reward_function=eval_utils.iou)
+        combined_iou_score, row_iou_score, column_iou_score = factored_2dlcs(true_bbox_grid, pred_bbox_grid, reward_function=eval_utils.iou)
+        combined_lcs_score, row_lcs_score, column_lcs_score = factored_2dlcs(true_text_grid, pred_text_grid, reward_function=make_align1d_reward_function(lambda x, y: 1 if x == y else 0))
+        
+        #---Collect results
+        curr_time = datetime.now()
+        result = (combined_dilatedbbox_score, combined_relspan_score, combined_iou_score, combined_lcs_score)
+        if 4 in true_labels or 5 in true_labels:
+            complicated_results.append(result)
+        else:
+            simple_results.append(result)
+        
+        #---Display output for debugging
+        if debug:
+            print("TabS-RawIoU: {}; row-first: {}, column-first: {}".format(combined_dilatedbbox_score, row_dilatedbbox_score, column_dilatedbbox_score))
+            print("TabS-RelSpan: {}; row-first: {}, column-first: {}".format(combined_relspan_score, row_relspan_score, column_relspan_score))
+            print("TabS-IoU: {}; row-first: {}, column-first: {}".format(combined_iou_score, row_iou_score, column_iou_score))
+            print("TabS-Text: {}; row-first: {}, column-first: {}".format(combined_lcs_score, row_lcs_score, column_lcs_score))        
+            
+            fig,ax = plt.subplots(1)
+            ax.imshow(img_test, interpolation='lanczos')
+    
+            linewidth = 1
+            alpha = 0
+            for word in page_tokens:
+                bbox = word['bbox']
+                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
+                                         edgecolor='none',facecolor="orange", alpha=0.04)
+                ax.add_patch(rect)
+                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
+                                         edgecolor="orange",facecolor='none',linestyle="--")
+                ax.add_patch(rect)         
+            rescaled_bboxes = rescale_bboxes(torch.tensor(boxes[0], dtype=torch.float32), img_test.size)
+            for bbox, label, score in zip(rescaled_bboxes, labels[0].tolist(), scores[0].tolist()):
+                bbox = bbox.cpu().numpy().tolist()
+                if not label > 5 and score > 0.3:
+                    color, alpha, linewidth = get_bbox_decorations(label, score)
+                    rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=linewidth, 
+                                             edgecolor='none',facecolor=color, alpha=alpha)
+                    ax.add_patch(rect)
+                    rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=linewidth, 
+                                             edgecolor=color,facecolor='none',linestyle="--")
+                    ax.add_patch(rect) 
+    
+            fig.set_size_inches((15, 18))
+            plt.show()
+            
+            fig,ax = plt.subplots(1)
+            ax.imshow(img_test, interpolation='lanczos')    
+            for cell in true_cells:
+                bbox = cell['bbox']
+                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
+                                         edgecolor='none',facecolor="brown", alpha=0.04)
+                ax.add_patch(rect)
+                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
+                                         edgecolor="brown",facecolor='none',linestyle="--")
+                ax.add_patch(rect) 
+                cell_rect = Rect()
+                for span in cell['spans']:
+                    bbox = span['bbox']
+                    rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
+                                             edgecolor='none',facecolor="green", alpha=0.2)
+                    ax.add_patch(rect)
+                    rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
+                                             edgecolor="green",facecolor='none',linestyle="--")
+                    ax.add_patch(rect) 
+                    cell_rect.includeRect(bbox)
+                if cell_rect.getArea() > 0:
+                    bbox = list(cell_rect)
+                    rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
+                                             edgecolor='none',facecolor="red", alpha=0.15)
+                    ax.add_patch(rect)
+                    rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
+                                             edgecolor="red",facecolor='none',linestyle="--")
+                    ax.add_patch(rect)
+    
+            fig.set_size_inches((15, 18))
+            plt.show()
+            
+            fig,ax = plt.subplots(1)
+            ax.imshow(img_test, interpolation='lanczos')
+    
+            for cell in pred_cells:
+                bbox = cell['bbox']
+                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
+                                         edgecolor='none',facecolor="magenta", alpha=0.15)
+                ax.add_patch(rect)
+                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
+                                         edgecolor="magenta",facecolor='none',linestyle="--")
+                ax.add_patch(rect) 
+                cell_rect = Rect()
+                for span in cell['spans']:
+                    bbox = span['bbox']
+                    rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
+                                             edgecolor='none',facecolor="green", alpha=0.2)
+                    ax.add_patch(rect)
+                    rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
+                                             edgecolor="green",facecolor='none',linestyle="--")
+                    ax.add_patch(rect) 
+                    cell_rect.includeRect(bbox)
+                if cell_rect.getArea() > 0:
+                    bbox = list(cell_rect)
+                    rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
+                                             edgecolor='none',facecolor="red", alpha=0.15)
+                    ax.add_patch(rect)
+                    rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
+                                             edgecolor="red",facecolor='none',linestyle="--")
+                    ax.add_patch(rect) 
+    
+            fig.set_size_inches((15, 18))
+            plt.show()
+        if idx%1000 == 0:
+            print(idx)
+            print(datetime.now() - st_time)
+            
+    print("Total time taken for evaluation is ", datetime.now() - st_time)
+    
+    
+    
+    results = complicated_results
+    print("Results on complicated tables:")
+    print("Raw Cell Bbox IoU: {}".format(np.mean([result[0] for result in results])))
+    print("RelSpan IoU: {}".format(np.mean([result[1] for result in results])))
+    print("Cell Bbox IoU: {}".format(np.mean([result[2] for result in results])))
+    print("Text LCS: {}".format(np.mean([result[3] for result in results])))
+    
+    
+    results = simple_results
+    print("Results on simple tables:")
+    print("Raw Cell Bbox IoU: {}".format(np.mean([result[0] for result in results])))
+    print("RelSpan IoU: {}".format(np.mean([result[1] for result in results])))
+    print("Cell Bbox IoU: {}".format(np.mean([result[2] for result in results])))
+    print("Text LCS: {}".format(np.mean([result[3] for result in results])))
+    
+    
+    results = simple_results + complicated_results
+    print("Results on all tables:")
+    print("Raw Cell Bbox IoU: {}".format(np.mean([result[0] for result in results])))
+    print("RelSpan IoU: {}".format(np.mean([result[1] for result in results])))
+    print("Cell Bbox IoU: {}".format(np.mean([result[2] for result in results])))
+    print("Text LCS: {}".format(np.mean([result[3] for result in results])))
+    
+    
+    #plot_graph([result[0] for result in results], [result[2] for result in results], "Raw BBox IoU", "BBox IoU")
 
-
-
-results = complicated_results
-print("Results on complicated tables:")
-print("Raw Cell Bbox IoU: {}".format(np.mean([result[0] for result in results])))
-print("RelSpan IoU: {}".format(np.mean([result[1] for result in results])))
-print("Cell Bbox IoU: {}".format(np.mean([result[2] for result in results])))
-print("Text LCS: {}".format(np.mean([result[3] for result in results])))
-
-
-results = simple_results
-print("Results on simple tables:")
-print("Raw Cell Bbox IoU: {}".format(np.mean([result[0] for result in results])))
-print("RelSpan IoU: {}".format(np.mean([result[1] for result in results])))
-print("Cell Bbox IoU: {}".format(np.mean([result[2] for result in results])))
-print("Text LCS: {}".format(np.mean([result[3] for result in results])))
-
-
-results = simple_results + complicated_results
-print("Results on all tables:")
-print("Raw Cell Bbox IoU: {}".format(np.mean([result[0] for result in results])))
-print("RelSpan IoU: {}".format(np.mean([result[1] for result in results])))
-print("Cell Bbox IoU: {}".format(np.mean([result[2] for result in results])))
-print("Text LCS: {}".format(np.mean([result[3] for result in results])))
-
-
-plot_graph([result[0] for result in results], [result[2] for result in results], "Raw BBox IoU", "BBox IoU")
-"""
-plt.scatter([result[0] for result in results], [result[2] for result in results], s=40, c='red', marker='o')
-plt.title("Raw BBox IoU vs. BBox IoU")
-plt.xlim([0.5, 1])
-plt.ylim([0.5, 1])
-plt.plot([0, 1], [0, 1])
-plt.xlabel("Raw BBox IoU")
-plt.ylabel("BBox IoU")
-plt.gcf().set_size_inches((8, 8))
-plt.show()
-
-
-# In[ ]:
-
-
-plt.scatter([result[1] for result in results], [result[2] for result in results], s=40, c='red', marker='o')
-plt.title("RelSpan IoU vs. BBox IoU")
-plt.xlim([0.5, 1])
-plt.ylim([0.5, 1])
-plt.plot([0, 1], [0, 1])
-plt.xlabel("RelSpan IoU")
-plt.ylabel("BBox IoU")
-plt.gcf().set_size_inches((8, 8))
-plt.show()
-
-
-# In[ ]:
-
-
-plt.scatter([result[1] for result in results], [result[3] for result in results], s=40, c='red', marker='o')
-plt.title("RelSpan IoU vs. Text LCS")
-plt.xlim([0.5, 1])
-plt.ylim([0.5, 1])
-plt.plot([0, 1], [0, 1])
-plt.xlabel("RelSpan IoU")
-plt.ylabel("Text LCS")
-plt.gcf().set_size_inches((8, 8))
-plt.show()
-
-
-# In[ ]:
-
-
-plt.scatter([result[2] for result in results], [result[3] for result in results], s=40, c='red', marker='o')
-plt.title("BBox IoU vs. Text LCS")
-plt.xlim([0.5, 1])
-plt.ylim([0.5, 1])
-plt.plot([0, 1], [0, 1])
-plt.xlabel("BBox IoU")
-plt.ylabel("Text LCS")
-plt.gcf().set_size_inches((8, 8))
-plt.show()
-"""
+if __name__ =="__main__":
+    main()

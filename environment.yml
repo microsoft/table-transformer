@@ -25,5 +25,4 @@ dependencies:
     - tensorboardx==1.9
     - scipy==1.1.0
     - jupytext==1.3.0
-    - fitz
     - PyMuPDF==1.16.14
