@@ -108,7 +108,7 @@ class SetCriterion(nn.Module):
         self.register_buffer('empty_weight', empty_weight)
 
     def loss_labels(self, outputs, targets, indices, num_boxes, log=True):
-        """Classification loss (NLL)
+        """Classification loss (Negative Log Likelihood)
         targets dicts must contain the key "labels" containing a tensor of dim [nb_target_boxes]
         """
         assert 'pred_logits' in outputs
