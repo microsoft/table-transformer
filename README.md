@@ -4,7 +4,8 @@ This repository contains training and evaluation code for table extraction. We
 perform the experiments on PubTables1M. The code adopts DETR and provides
 supporting training code. In addition to the training code, we also provide the
 code to evaluate GriTS metrics proposed in the paper. Please download the
-dataset at ___
+[PubTables1M](https://pubtables1m.blob.core.windows.net/pubtables1m/README)
+dataset before going forward.
 
 ## Installation
 Create a conda environment from the yml file and activate it as follows
@@ -14,8 +15,10 @@ Create a conda environment from the yml file and activate it as follows
 
 ## Training
 There's 2 tasks in this dataset.
-*Table Detection: Detecting tables in pdf page images
-*Table Structure Recognition: Detection of table structures
+
+1. Table Detection: Detecting tables in pdf page images
+2. Table Structure Recognition: Detection of table structures
+
 For Detailed description, please refer to the paper.
 
 Sample training commands look like the below:
