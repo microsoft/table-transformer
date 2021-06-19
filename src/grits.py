@@ -36,16 +36,6 @@ from datasets.coco_eval import CocoEvaluator
 from config import Args
 import eval_utils
 from table_datasets import PDFTablesDataset, RandomMaxResize
-    
-
-def get_args():
-    parser = argparse.ArgumentParser()
-    
-    parser.add_argument('--data_root_dir', help="Root data directory for images and labels")
-    parser.add_argument('--model_load_path', help="The path to trained model")
-    parser.add_argument('--table_words_dir', help="Folder containg the bboxes of table words")
-
-    return parser.parse_args()
 
 
 def transpose(matrix):
@@ -451,40 +441,11 @@ def plot_graph(metric_1, metric_2, metric_1_name, metric_2_name):
     plt.gcf().set_size_inches((8, 8))
     plt.show()
 
-def main():
-    debug = False
-    cmd_args = get_args().__dict__
-    args = Args
-    for key in cmd_args:
-        val = cmd_args[key]
-        setattr(args, key, val)
-    print(args.__dict__)
-    
-    device = torch.device(args.device)
-    model, criterion, postprocessors = build_model(args)
-    model.to(device)
-    
-    # Model loading code that works even if the loaded model doesn't exactly match the one we just created
-    loaded_state_dict = torch.load(args.model_load_path, map_location=device)
-    model_state_dict = model.state_dict()
-    pretrained_dict = {k: v for k, v in loaded_state_dict.items() if k in model_state_dict and model_state_dict[k].shape == v.shape}
-    model_state_dict.update(pretrained_dict)
-    model.load_state_dict(model_state_dict, strict=True)
-    
-    
-    class_map = {'table': 0, 'table column': 1, 'table row': 2, 'table column header': 3, 'table projected row header': 4, 'table spanning cell': 5, 'no object': 6}
-    class_list = list(class_map)
-    class_set = set(class_map.values())
-    class_set.remove(class_map['no object'])
-
-    # Loading data
-    dataset_test = PDFTablesDataset(os.path.join(args.data_root_dir, "test"), RandomMaxResize(1000, 1000),
-                                   include_original=True, make_coco=False, image_extension=".jpg",
-                                    xml_fileset="100_objects_filelist.txt", class_list=class_list, class_set=class_set, class_map=class_map)
-    data_loader_test = torch.utils.data.DataLoader(
-        dataset_test, batch_size=1, shuffle=True, num_workers=1,
-        collate_fn=utils.collate_fn)
-    
+def grits(args, model, dataset_test, device):
+    """
+    This function runs the GriTS proposed in the paper. We also have a debug
+    mode which let's you see the outputs of a model on the pdf pages.
+    """
     structure_class_names = [
             'table', 'table column', 'table row', 'table column header', 'table projected row header', 'table spanning cell', 'no object'
     ]
@@ -494,19 +455,16 @@ def main():
             "table spanning cell": 0.5, "no object": 10
     }
     
-    if debug:
+    if args.debug:
         max_samples = 50
     else:
         max_samples = len(dataset_test)
     print(max_samples)
     
-    
     normalize = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
-    
-    
     
     model.eval()
     
@@ -515,8 +473,6 @@ def main():
     st_time = datetime.now()
     
     for idx in range(max_samples):
-        print(idx)
-        
         #---Read source data: image, objects, and word bounding boxes
         curr_time = datetime.now()
         img, gt, orig_img, img_path = dataset_test[idx]
@@ -587,7 +543,7 @@ def main():
             simple_results.append(result)
         
         #---Display output for debugging
-        if debug:
+        if args.debug:
             print("TabS-RawIoU: {}; row-first: {}, column-first: {}".format(combined_dilatedbbox_score, row_dilatedbbox_score, column_dilatedbbox_score))
             print("TabS-RelSpan: {}; row-first: {}, column-first: {}".format(combined_relspan_score, row_relspan_score, column_relspan_score))
             print("TabS-IoU: {}; row-first: {}, column-first: {}".format(combined_iou_score, row_iou_score, column_iou_score))
@@ -691,9 +647,8 @@ def main():
             
     print("Total time taken for evaluation is ", datetime.now() - st_time)
     
-    
-    
     results = complicated_results
+    print('-'*100)
     print("Results on complicated tables:")
     print("Raw Cell Bbox IoU: {}".format(np.mean([result[0] for result in results])))
     print("RelSpan IoU: {}".format(np.mean([result[1] for result in results])))
@@ -702,6 +657,7 @@ def main():
     
     
     results = simple_results
+    print('-'*100)
     print("Results on simple tables:")
     print("Raw Cell Bbox IoU: {}".format(np.mean([result[0] for result in results])))
     print("RelSpan IoU: {}".format(np.mean([result[1] for result in results])))
@@ -710,14 +666,17 @@ def main():
     
     
     results = simple_results + complicated_results
+    print('-'*100)
     print("Results on all tables:")
     print("Raw Cell Bbox IoU: {}".format(np.mean([result[0] for result in results])))
     print("RelSpan IoU: {}".format(np.mean([result[1] for result in results])))
     print("Cell Bbox IoU: {}".format(np.mean([result[2] for result in results])))
     print("Text LCS: {}".format(np.mean([result[3] for result in results])))
-    
-    
-    #plot_graph([result[0] for result in results], [result[2] for result in results], "Raw BBox IoU", "BBox IoU")
+
+    # We can plot the graphs to see the correlation between different variations
+    # of similarity metrics by using plot_graph fn as shown below
+    #
+    # plot_graph([result[0] for result in results], [result[2] for result in results], "Raw BBox IoU", "BBox IoU")
 
 if __name__ =="__main__":
     main()

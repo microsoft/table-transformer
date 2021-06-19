@@ -290,15 +290,17 @@ def _isArrayLike(obj):
 class PDFTablesDataset(torch.utils.data.Dataset):
     def __init__(self, root, transforms=None, max_size=None, do_crop=True, make_coco=False,
                  include_original=False, max_neg=None, negatives_root=None, xml_fileset="filelist.txt",
-                image_extension='.png', class_list=None, class_set=None, class_map=None):
+                image_extension='.png', class_map=None):
         self.root = root
         self.transforms = transforms
         self.do_crop=do_crop
         self.make_coco = make_coco
         self.image_extension = image_extension
-        self.class_list = class_list
-        self.class_set = class_set
         self.class_map = class_map
+        self.class_list = list(class_map)
+        self.class_set = set(class_map.values())
+        self.class_set.remove(class_map['no object'])
+
 
         try:
             with open(os.path.join(root, xml_fileset), 'r') as file:
