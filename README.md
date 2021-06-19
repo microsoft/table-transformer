@@ -37,7 +37,7 @@ calculates all 4 variations presented in the paper. Based on the model, one can
 tune which variation to use. The table words dir path is not required for all
 variations but we use it in our case as PubTables1M contains this information.
 
-> python grits.py --data_root_dir /path/to/structure --model_load_path /path/to/model --table_words_dir /path/to/table/words
+> python main.py --data_root_dir /path/to/structure --model_load_path /path/to/model --table_words_dir /path/to/table/words --mode grits
 
 
 ## Contributing
