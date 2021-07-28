@@ -14,8 +14,8 @@ Create a conda environment from the yml file and activate it as follows
 ## Training
 The code trains models for 2 different table extraction tasks:
 
-1. Table Detection: Detecting tables in pdf page images
-2. Table Structure Recognition: Detection of table structures
+1. Table Detection
+2. Table Structure Recognition + Functional Analysis
 
 For a detailed description of these tasks and the models, please refer to the paper.
 
