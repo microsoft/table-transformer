@@ -1,4 +1,4 @@
-# Table Transformer
+# PubTables1M
 
 This repository contains training and evaluation code for the paper "PubTables1M: Towards a universal dataset and metrics for training and evaluating table extraction models".
 
@@ -12,7 +12,7 @@ Create a conda environment from the yml file and activate it as follows
 > conda activate tables-detr
 
 ## Training
-The code trains models for 2 different table extraction tasks:
+The code trains models for 2 different sets of table extraction tasks:
 
 1. Table Detection
 2. Table Structure Recognition + Functional Analysis
