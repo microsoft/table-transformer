@@ -1,11 +1,8 @@
 # Table Transformer
 
-This repository contains training and evaluation code for table extraction. We
-perform the experiments on PubTables1M. The code adopts DETR and provides
-supporting training code. In addition to the training code, we also provide the
-code to evaluate GriTS metrics proposed in the paper. Please download the
-[PubTables1M](https://pubtables1m.blob.core.windows.net/pubtables1m/README)
-dataset before going forward.
+This repository contains training and evaluation code for the paper "PubTables1M: Towards a universal dataset and metrics for training and evaluating table extraction models".
+
+The data will be officially released soon.
 
 ## Installation
 Create a conda environment from the yml file and activate it as follows
@@ -15,14 +12,14 @@ Create a conda environment from the yml file and activate it as follows
 > conda activate tables-detr
 
 ## Training
-There's 2 tasks in this dataset.
+The code trains models for 2 different table extraction tasks:
 
 1. Table Detection: Detecting tables in pdf page images
 2. Table Structure Recognition: Detection of table structures
 
-For Detailed description, please refer to the paper.
+For a detailed description of these tasks and the models, please refer to the paper.
 
-Sample training commands look like the below:
+Sample training commands:
 
 > cd src
 
