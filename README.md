@@ -1,6 +1,6 @@
 # PubTables-1M
 
-This repository contains training and evaluation code for the paper "PubTables-1M: Towards a universal dataset and metrics for training and evaluating table extraction models".
+This repository contains training and evaluation code for the paper ["PubTables-1M: Towards a universal dataset and metrics for training and evaluating table extraction models".](https://arxiv.org/pdf/2110.00061.pdf)
 
 The data will be officially released soon.
 
