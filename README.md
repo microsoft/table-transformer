@@ -1,17 +1,50 @@
 # PubTables-1M
 
-This repository contains training and evaluation code for the paper ["PubTables-1M: Towards a universal dataset and metrics for training and evaluating table extraction models".](https://arxiv.org/pdf/2110.00061.pdf)
+This repository contains training and evaluation code for the paper ["PubTables-1M: Towards a universal dataset and metrics for training and evaluating table extraction models"](https://arxiv.org/pdf/2110.00061.pdf).
 
-The data will be officially released soon.
+The goal of PubTables-1M is to create a large, detailed, high-quality dataset for training and evaluating a wide variety of models for the tasks of **table detection**, **table structure recognition**, and **functional analysis**. It contains:
+- 460,589 annotated document pages containing tables for table detection.
+- 947,642 fully annotated tables including text content and complete location (bounding box) information for table structure recognition and functional analysis.
+- Full bounding boxes in both image and PDF coordinates for all table rows, columns, and cells (including blank cells), as well as other annotated structures such as column headers and projected row headers.
+- Rendered images of all tables and pages.
+- Bounding boxes and text for all words appearing in each table and page image.
+- Additional cell properties not used in the current model training.
 
-## Installation
+Additionally, cells in the headers are *canonicalized* and we implement multiple *quality control* steps to ensure the annotations are as free of noise as possible. For more details, please see [our paper](https://arxiv.org/pdf/2110.00061.pdf).
+
+## News
+`10/21/2021`: The full PubTables-1M dataset has been officially released on [Microsoft Research Open Data](https://msropendata.com/datasets/505fcbe3-1383-42b1-913a-f651b8b712d3).
+
+## Getting the Data
+[PubTables-1M](https://msropendata.com/datasets/505fcbe3-1383-42b1-913a-f651b8b712d3) is available for download from [Microsoft Research Open Data](https://msropendata.com/).
+
+It comes in 5 tar.gz files:
+- PubTables-1M-Image_Page_Detection_PASCAL_VOC.tar.gz
+- PubTables-1M-Image_Page_Words_JSON.tar.gz
+- PubTables-1M-Image_Table_Structure_PASCAL_VOC.tar.gz
+- PubTables-1M-Image_Table_Words_JSON.tar.gz
+- PubTables-1M-PDF_Annotations_JSON.tar.gz
+
+To download from the command line:
+1. Visit the [dataset home page](https://msropendata.com/datasets/505fcbe3-1383-42b1-913a-f651b8b712d3) with a web browser and click Download in the top left corner. This will create a link to download the dataset from Azure with a unique access token for you that looks like `https://msropendataset01.blob.core.windows.net/pubtables1m?[SAS_TOKEN_HERE]`.
+2. You can then use the command line tool [azcopy](https://docs.microsoft.com/en-us/azure/storage/common/storage-use-azcopy-v10) to download all of the files with the following command:
+```
+azcopy copy "https://msropendataset01.blob.core.windows.net/pubtables1m?[SAS_TOKEN_HERE]" "/path/to/your/download/folder/"
+```
+
+Then unzip each of the archives from the command line using:
+```
+tar -xzvf yourfile.tar.gz
+```
+
+## Code Installation
 Create a conda environment from the yml file and activate it as follows
+```
+conda env create -f environment.yml
+conda activate tables-detr
+```
 
-> conda env create -f environment.yml
-
-> conda activate tables-detr
-
-## Training
+## Model Training
 The code trains models for 2 different sets of table extraction tasks:
 
 1. Table Detection
@@ -21,11 +54,11 @@ For a detailed description of these tasks and the models, please refer to the pa
 
 Sample training commands:
 
-> cd src
-
-> python main.py --data_root_dir /path/to/detection --data_type detection
-
-> python main.py --data_root_dir /path/to/structure --data_type structure
+```
+cd src
+python main.py --data_root_dir /path/to/detection --data_type detection
+python main.py --data_root_dir /path/to/structure --data_type structure
+```
 
 ## GriTS metric evaluation
 GriTS metrics proposed in the paper can be evaluated once you have trained a
@@ -34,8 +67,9 @@ calculates all 4 variations presented in the paper. Based on the model, one can
 tune which variation to use. The table words dir path is not required for all
 variations but we use it in our case as PubTables1M contains this information.
 
-> python main.py --data_root_dir /path/to/structure --model_load_path /path/to/model --table_words_dir /path/to/table/words --mode grits
-
+```
+python main.py --data_root_dir /path/to/structure --model_load_path /path/to/model --table_words_dir /path/to/table/words --mode grits
+```
 
 ## Contributing
 
