@@ -2,7 +2,11 @@
 
 This repository contains training and evaluation code for the paper ["PubTables-1M: Towards a universal dataset and metrics for training and evaluating table extraction models"](https://arxiv.org/pdf/2110.00061.pdf).
 
-The goal of PubTables-1M is to create a large, detailed, high-quality dataset for training and evaluating a wide variety of models for the tasks of **table detection**, **table structure recognition**, and **functional analysis**. It contains:
+The goal of PubTables-1M is to create a large, detailed, high-quality dataset for training and evaluating a wide variety of models for the tasks of **table detection**, **table structure recognition**, and **functional analysis**.
+
+![table_extraction_v2](https://user-images.githubusercontent.com/10793386/139559159-cd23c972-8731-48ed-91df-f3f27e9f4d79.jpg)
+
+It contains:
 - 460,589 annotated document pages containing tables for table detection.
 - 947,642 fully annotated tables including text content and complete location (bounding box) information for table structure recognition and functional analysis.
 - Full bounding boxes in both image and PDF coordinates for all table rows, columns, and cells (including blank cells), as well as other annotated structures such as column headers and projected row headers.
