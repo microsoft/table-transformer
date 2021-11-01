@@ -2,6 +2,8 @@
 
 This repository contains training and evaluation code for the paper ["PubTables-1M: Towards a universal dataset and metrics for training and evaluating table extraction models"](https://arxiv.org/pdf/2110.00061.pdf).
 
+*Note: Currently only the PubTables-1M dataset is officially released. Updates to the code and paper (and documentation) are currently ongoing and we will announce when these are ready for a stable release.*
+
 The goal of PubTables-1M is to create a large, detailed, high-quality dataset for training and evaluating a wide variety of models for the tasks of **table detection**, **table structure recognition**, and **functional analysis**.
 
 ![table_extraction_v2](https://user-images.githubusercontent.com/10793386/139559159-cd23c972-8731-48ed-91df-f3f27e9f4d79.jpg)
