@@ -82,7 +82,7 @@ def crop_around_bbox_coco(image, crop_bbox, max_margin, target):
         return cropped_image, target
                  
     return image, target
-    
+
 class TightAnnotationCrop(object):
     def __init__(self, labels, left_max_pad, top_max_pad, right_max_pad, bottom_max_pad):
         self.labels = set(labels)
@@ -178,7 +178,7 @@ class RandomPercentageCrop(object):
                 return cropped_image, target
 
         return image, target
-            
+
 class ColorJitterWithTarget(object):
     def __init__(self, brightness=0, contrast=0, saturation=0, hue=0):
         self.transform = transforms.ColorJitter(brightness=brightness,
@@ -190,7 +190,7 @@ class ColorJitterWithTarget(object):
         img = self.transform(img)
 
         return img, target
-        
+
 class RandomErasingWithTarget(object):
     def __init__(self, p=0.5, scale=(0.02, 0.33), ratio=(0.3, 3.3), value=255, inplace=False):
         self.transform = transforms.RandomErasing(p=p,
@@ -203,7 +203,7 @@ class RandomErasingWithTarget(object):
         img = self.transform(img)
 
         return img, target
-        
+
 class ToPILImageWithTarget(object):
     def __init__(self):
         self.transform = transforms.ToPILImage()
@@ -212,7 +212,7 @@ class ToPILImageWithTarget(object):
         img = self.transform(img)
 
         return img, target
-    
+
 class RandomDilation(object):
     def __init__(self, probability=0.5, size=3):
         self.probability = probability
@@ -225,7 +225,7 @@ class RandomDilation(object):
             img = img.filter(self.filter)
         
         return img, target
-        
+
 class RandomErosion(object):
     def __init__(self, probability=0.5, size=3):
         self.probability = probability
@@ -238,7 +238,7 @@ class RandomErosion(object):
             img = img.filter(self.filter)
         
         return img, target
-    
+
 class RandomResize(object):
     def __init__(self, min_min_size, max_min_size, max_max_size):
         self.min_min_size = min_min_size
@@ -263,7 +263,7 @@ class RandomResize(object):
         target["boxes"] = torch.as_tensor(resized_bboxes, dtype=torch.float32)
         
         return resized_image, target
-    
+
 class RandomMaxResize(object):
     def __init__(self, min_max_size, max_max_size):
         self.min_max_size = min_max_size
@@ -303,14 +303,14 @@ class PDFTablesDataset(torch.utils.data.Dataset):
 
 
         try:
-            with open(os.path.join(root, xml_fileset), 'r') as file:
+            with open(os.path.join(root, "..", xml_fileset), 'r') as file:
                 lines = file.readlines()
+                lines = [l.split('/')[-1] for l in lines]
         except:
             lines = os.listdir(root)
         xml_page_ids = set([f.strip().replace(".xml", "") for f in lines if f.strip().endswith(".xml")])
             
         image_directory = os.path.join(root, "..", "images")
-        #image_directory = os.path.join(root, "..", "..", "images")
         try:
             with open(os.path.join(image_directory, "filelist.txt"), 'r') as file:
                 lines = file.readlines()

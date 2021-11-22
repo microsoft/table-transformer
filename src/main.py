@@ -35,6 +35,8 @@ def get_args():
         default='structure',
         help="toggle between structure recognition and table detection")
     parser.add_argument('--model_load_path', help="The path to trained model")
+    parser.add_argument('--metrics_save_filepath',
+                        help="Filepath to save grits outputs")
     parser.add_argument('--table_words_dir',
                         help="Folder containg the bboxes of table words")
     parser.add_argument('--mode',
@@ -143,14 +145,14 @@ def get_data(args):
             max_neg=0,
             make_coco=False,
             image_extension=".jpg",
-            xml_fileset="100_objects_filelist.txt",
+            xml_fileset="train_filelist.txt",
             class_map=class_map)
         dataset_val = PDFTablesDataset(os.path.join(args.data_root_dir, "val"),
                                        get_transform(args.data_type, "val"),
                                        do_crop=False,
                                        make_coco=True,
                                        image_extension=".jpg",
-                                       xml_fileset="100_objects_filelist.txt",
+                                       xml_fileset="val_filelist.txt",
                                        class_map=class_map)
 
         sampler_train = torch.utils.data.RandomSampler(dataset_train)
@@ -181,7 +183,7 @@ def get_data(args):
                                         do_crop=False,
                                         make_coco=True,
                                         image_extension=".jpg",
-                                        xml_fileset="100_objects_filelist.txt",
+                                        xml_fileset="test_filelist.txt",
                                         class_map=class_map)
         sampler_test = torch.utils.data.SequentialSampler(dataset_test)
 
@@ -200,7 +202,7 @@ def get_data(args):
                                         include_original=True,
                                         make_coco=False,
                                         image_extension=".jpg",
-                                        xml_fileset="100_objects_filelist.txt",
+                                        xml_fileset="test_filelist.txt",
                                         class_map=class_map)
         return dataset_test
 
