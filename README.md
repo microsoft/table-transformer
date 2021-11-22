@@ -1,8 +1,10 @@
 # PubTables-1M
 
-This repository contains training and evaluation code for the paper ["PubTables-1M: Towards a universal dataset and metrics for training and evaluating table extraction models"](https://arxiv.org/pdf/2110.00061.pdf).
+This repository contains code and links to data for the papers:
+- ["PubTables-1M: Towards comprehensive table extraction from unstructured documents"](https://arxiv.org/pdf/2110.00061.pdf)
+- "GriTS: Grid table similarity metric for table structure recognition" (coming soon)
 
-*Note: Currently only the PubTables-1M dataset is officially released. Updates to the code and paper (and documentation) are currently ongoing and we will announce when these are ready for a stable release.*
+*Note: Updates to the code and papers (and documentation) are currently ongoing and we will announce when each of these is ready for a stable release.*
 
 The goal of PubTables-1M is to create a large, detailed, high-quality dataset for training and evaluating a wide variety of models for the tasks of **table detection**, **table structure recognition**, and **functional analysis**.
 
@@ -19,6 +21,7 @@ It contains:
 Additionally, cells in the headers are *canonicalized* and we implement multiple *quality control* steps to ensure the annotations are as free of noise as possible. For more details, please see [our paper](https://arxiv.org/pdf/2110.00061.pdf).
 
 ## News
+`11/21/2021`: Our paper "PubTables-1M: Towards comprehensive table extraction from unstructured documents" is available on [arXiv](https://arxiv.org/pdf/2110.00061.pdf).\
 `10/21/2021`: The full PubTables-1M dataset has been officially released on [Microsoft Research Open Data](https://msropendata.com/datasets/505fcbe3-1383-42b1-913a-f651b8b712d3).
 
 ## Getting the Data
