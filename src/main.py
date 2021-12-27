@@ -289,6 +289,13 @@ def train(args, model, criterion, postprocessors, device):
     max_batches_per_epoch = int(train_len / args.batch_size)
     print("Max batches per epoch: {}".format(max_batches_per_epoch))
 
+    if args.model_load_path:
+        checkpoint = torch.load(args.model_load_path, map_location='cpu')
+        model.load_state_dict(checkpoint['model_state_dict'])
+        model.to(device)
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        args.start_epoch = checkpoint['epoch'] + 1
+
     print("Start training")
     start_time = datetime.now()
     for epoch in range(args.start_epoch, args.epochs):
@@ -319,7 +326,12 @@ def train(args, model, criterion, postprocessors, device):
                      pubmed_stats['coco_eval_bbox'][0],
                      pubmed_stats['coco_eval_bbox'][8]))
 
-        torch.save(model.state_dict(), model_save_path)
+        torch.save({'epoch': epoch,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    }, model_save_path)
+        model_save_path_epoch = os.path.join(output_directory, 'model_' + str(epoch+1) + '.pth')
+        torch.save(model.state_dict(), model_save_path_epoch)
 
     print('Total training time: ', datetime.now() - start_time)
 
