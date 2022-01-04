@@ -250,6 +250,8 @@ def train(args, model, criterion, postprocessors, device):
     # Paths
     run_date = datetime.now().strftime("%Y%m%d%H%M%S")
     output_directory = os.path.join(args.data_root_dir, "output", run_date)
+    if args.model_load_path:
+        output_directory = os.path.split(args.model_load_path)[0]
     print("Output directory: ", output_directory)
     model_save_path = os.path.join(output_directory, 'model.pth')
 
