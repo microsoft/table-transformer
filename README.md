@@ -46,6 +46,18 @@ Then unzip each of the archives from the command line using:
 tar -xzvf yourfile.tar.gz
 ```
 
+## For Docker users
+
+```bash
+docker pull phamquiluan/table-transformer:latest
+
+# train TSR
+docker run -it --shm-size 8G --gpus all -v <data-path>:/code/data phamquiluan/table-transformer /bin/bash
+
+root@4871385751c9:/code/src# python3 main.py --data_root_dir /code/data --data_type structure
+```
+
+
 ## Code Installation
 Create a conda environment from the yml file and activate it as follows
 ```
