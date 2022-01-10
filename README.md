@@ -52,9 +52,11 @@ tar -xzvf yourfile.tar.gz
 docker pull phamquiluan/table-transformer:latest
 
 # train TSR
-docker run -it --shm-size 8G --gpus all -v <data-path>:/code/data phamquiluan/table-transformer /bin/bash
-
-root@4871385751c9:/code/src# python3 main.py --data_root_dir /code/data --data_type structure
+docker run -it --shm-size 8G --gpus all \
+  -v <data-path>:/code/data \
+  -v <output-path>:/code/output \
+  -v phamquiluan/table-transformer \
+  python3 main.py --data_root_dir /code/data --data_type structure
 ```
 
 
