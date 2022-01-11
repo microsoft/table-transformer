@@ -50,6 +50,8 @@ tar -xzvf yourfile.tar.gz
 
 ```bash
 docker pull phamquiluan/table-transformer:latest
+# or
+docker build -t phamquiluan/table-transformer -f Dockerfile .
 
 # train TSR
 docker run -it --shm-size 8G --gpus all \
