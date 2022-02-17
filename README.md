@@ -80,6 +80,17 @@ variations but we use it in our case as PubTables1M contains this information.
 python main.py --data_root_dir /path/to/structure --model_load_path /path/to/model --table_words_dir /path/to/table/words --mode grits
 ```
 
+## Citing
+Our work can be cited using:
+```
+@article{smock2021pubtables1m,
+  author={Smock, Brandon and Pesala, Rohith and Abraham, Robin},
+  title={Pub{T}ables-1{M}: Towards comprehensive table extraction from unstructured documents},
+  journal={arXiv preprint arXiv:2110.00061},
+  year={2021}
+}
+```
+
 ## Contributing
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
