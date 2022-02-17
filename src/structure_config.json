@@ -1,0 +1,45 @@
+{
+    "lr":5e-5,
+    "lr_backbone":1e-5,
+    "batch_size":2,
+    "weight_decay":1e-4,
+    "epochs":20,
+    "lr_drop":1,
+    "lr_gamma":0.9,
+    "clip_max_norm":0.1,
+    
+    "backbone":"resnet18",
+    "num_classes":6,
+    "dilation":false,
+    "position_embedding":"sine",
+    "emphasized_weights":{},
+    
+    "enc_layers":6,
+    "dec_layers":6,
+    "dim_feedforward":2048,
+    "hidden_dim":256,
+    "dropout":0.1,
+    "nheads":8,
+    "num_queries":125,
+    "pre_norm":true,
+    
+    "masks":false,
+
+    "aux_loss":false,
+    
+    "mask_loss_coef":1,
+    "dice_loss_coef":1,
+    "ce_loss_coef":1,
+    "bbox_loss_coef":5,
+    "giou_loss_coef":2,
+    "eos_coef":0.4,
+    
+    "set_cost_class":1,
+    "set_cost_bbox":5,
+    "set_cost_giou":2,
+
+    "device":"cuda",
+    "seed":42,
+    "start_epoch":0,
+    "num_workers":1
+}

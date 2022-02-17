@@ -3,6 +3,7 @@ Copyright (C) 2021 Microsoft Corporation
 """
 import os
 import argparse
+import json
 from datetime import datetime
 import sys
 import random
@@ -16,7 +17,6 @@ from models import build_model
 import util.misc as utils
 import datasets.transforms as R
 
-from config import Args
 from table_datasets import PDFTablesDataset, TightAnnotationCrop, RandomPercentageCrop, RandomErasingWithTarget, ToPILImageWithTarget, RandomMaxResize, RandomCrop
 from grits import grits
 
@@ -25,7 +25,11 @@ def get_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--data_root_dir',
+                        required=True,
                         help="Root data directory for images and labels")
+    parser.add_argument('--config_file',
+                        required=True,
+                        help="Filepath to the config containing the args")
     parser.add_argument('--backbone',
                         default='resnet18',
                         help="Backbone for the model")
@@ -340,10 +344,9 @@ def train(args, model, criterion, postprocessors, device):
 
 def main():
     cmd_args = get_args().__dict__
-    args = Args
-    for key in cmd_args:
-        val = cmd_args[key]
-        setattr(args, key, val)
+    config_args = json.load(open(cmd_args['config_file'], 'rb'))
+    config_args.update(cmd_args)
+    args = type('Args', (object,), config_args)
     print(args.__dict__)
     print('-' * 100)
 
