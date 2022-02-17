@@ -35,7 +35,6 @@ from models import build_model
 import util.misc as utils
 import datasets.transforms as R
 from datasets.coco_eval import CocoEvaluator
-from config import Args
 import eval_utils
 from table_datasets import PDFTablesDataset, RandomMaxResize
 
