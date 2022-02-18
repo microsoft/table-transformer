@@ -65,8 +65,8 @@ Sample training commands:
 
 ```
 cd src
-python main.py --data_root_dir /path/to/detection --data_type detection
-python main.py --data_root_dir /path/to/structure --data_type structure
+python main.py --data_root_dir /path/to/detection --data_type detection --config_file detection_config.json
+python main.py --data_root_dir /path/to/structure --data_type structure --config_file structure_config.json
 ```
 
 ## GriTS metric evaluation
