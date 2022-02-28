@@ -61,24 +61,47 @@ The code trains models for 2 different sets of table extraction tasks:
 
 For a detailed description of these tasks and the models, please refer to the paper.
 
-Sample training commands:
+To train, you need to ```cd``` to the ```src``` directory and specify: 1. the path to the dataset, 2. the task (detection or structure), and 3. the path to the config file, which contains the hyperparameters for the architecture and training.
+
+To train the detection model:
+```
+python main.py --data_type detection --config_file detection_config.json --data_root_dir /path/to/detection_data
+```
+
+To train the structure recognition model:
+```
+python main.py --data_type structure --config_file structure_config.json --data_root_dir /path/to/structure_data
+```
+
+##  Evaluation
+Evaluation on the test data currently operates in two different modes.
+The first mode ("eval") computes standard metrics for object detection (AP, AP50, etc.).
+This mode applies to either the detection model or the structure recognition model.
+
+The second mode ("grits") computes the grid table similarity (GriTS) metrics for table structure recognition.
+GriTS is a measure of table cell correctness and is defined as the average correctness of each cell averaged over all tables.
+GriTS can measure the correctness of predicted cells based on:  1. cell topology alone, 2. cell topology and the reported bounding box location of each cell, or 3. cell topology and the reported text content of each cell.
+For more details on GriTS, please see our papers.
+
+To compute object detection metrics for the detection model:
 
 ```
-cd src
-python main.py --data_root_dir /path/to/detection --data_type detection --config_file detection_config.json
-python main.py --data_root_dir /path/to/structure --data_type structure --config_file structure_config.json
+python main.py --mode eval --data_type detection --config_file detection_config.json --data_root_dir /path/to/detection_data --model_load_path /path/to/detection_model  
 ```
 
-## GriTS metric evaluation
-GriTS metrics proposed in the paper can be evaluated once you have trained a
-model. We consider the model trained in the previous step. This script
-calculates all 4 variations presented in the paper. Based on the model, one can
-tune which variation to use. The table words dir path is not required for all
-variations but we use it in our case as PubTables1M contains this information.
+To compute object detection metrics for the structure recognition model:
 
 ```
-python main.py --data_root_dir /path/to/structure --model_load_path /path/to/model --table_words_dir /path/to/table/words --mode grits
+python main.py --mode eval --data_type structure --config_file structure_config.json --data_root_dir /path/to/structure_data --model_load_path /path/to/structure_model
 ```
+
+To compute the GriTS metrics for the structure recognition model:
+
+```
+python main.py --mode grits --data_type structure --config_file structure_config.json --data_root_dir /path/to/structure_data --table_words_dir /path/to/table_words_data --model_load_path /path/to/structure_model --metrics_save_filepath /path/to/metrics_log_file
+```
+
+Detailed instance-level metrics for GriTS are saved to the log file specified in ```--metrics_save_filepath```.
 
 ## Citing
 Our work can be cited using:
