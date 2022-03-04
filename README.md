@@ -21,8 +21,42 @@ It contains:
 Additionally, cells in the headers are *canonicalized* and we implement multiple *quality control* steps to ensure the annotations are as free of noise as possible. For more details, please see [our paper](https://arxiv.org/pdf/2110.00061.pdf).
 
 ## News
+`03/04/2022`: We have released the pre-trained weights for the table detection model trained on PubTables-1M.\
+`03/03/2022`: "PubTables-1M: Towards comprehensive table extraction from unstructured documents" has been accepted at [CVPR 2022](https://cvpr2022.thecvf.com/).\
 `11/21/2021`: Our paper "PubTables-1M: Towards comprehensive table extraction from unstructured documents" is available on [arXiv](https://arxiv.org/pdf/2110.00061.pdf).\
 `10/21/2021`: The full PubTables-1M dataset has been officially released on [Microsoft Research Open Data](https://msropendata.com/datasets/505fcbe3-1383-42b1-913a-f651b8b712d3).
+
+## Model Weights
+We provide the pre-trained model for table detection trained for 20 epochs on PubTables-1M.
+
+<table>
+  <thead>
+    <tr style="text-align: right;">
+      <th>Task</th>
+      <th>Backbone</th>
+      <th>Schedule</th>
+      <th>AP50</th>
+      <th>AP75</th>
+      <th>AP</th>
+      <th>AR</th>
+      <th>File</th>
+      <th>Size</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="text-align: right;">
+      <td>Table Detection</td>
+      <td>R18</td>
+      <td>20 Epochs</td>
+      <td>0.995</td>
+      <td>0.989</td>
+      <td>0.970</td>
+      <td>0.985</td>
+      <td><a href="https://pubtables1m.blob.core.windows.net/model/pubtables1m_detection_detr_r18.pth">Weights</a></td>
+      <td>110 MB</td>
+    </tr>
+  </tbody>
+</table>
 
 ## Getting the Data
 [PubTables-1M](https://msropendata.com/datasets/505fcbe3-1383-42b1-913a-f651b8b712d3) is available for download from [Microsoft Research Open Data](https://msropendata.com/).
