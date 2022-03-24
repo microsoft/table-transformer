@@ -2,7 +2,7 @@
 
 This repository contains code and links to data for the papers:
 - ["PubTables-1M: Towards comprehensive table extraction from unstructured documents"](https://arxiv.org/pdf/2110.00061.pdf)
-- "GriTS: Grid table similarity metric for table structure recognition" (coming soon)
+- ["GriTS: Grid table similarity metric for table structure recognition"](https://arxiv.org/pdf/2203.12555.pdf)
 
 *Note: Updates to the code and papers (and documentation) are currently ongoing and we will announce when each of these is ready for a stable release.*
 
@@ -21,10 +21,12 @@ It contains:
 Additionally, cells in the headers are *canonicalized* and we implement multiple *quality control* steps to ensure the annotations are as free of noise as possible. For more details, please see [our paper](https://arxiv.org/pdf/2110.00061.pdf).
 
 ## News
+`03/23/2022`: Our paper "GriTS: Grid table similarity metric for table structure recognition" is now available on [arXiv](https://arxiv.org/pdf/2203.12555.pdf)\
 `03/04/2022`: We have released the pre-trained weights for the table detection model trained on PubTables-1M.\
 `03/03/2022`: "PubTables-1M: Towards comprehensive table extraction from unstructured documents" has been accepted at [CVPR 2022](https://cvpr2022.thecvf.com/).\
-`11/21/2021`: Our paper "PubTables-1M: Towards comprehensive table extraction from unstructured documents" is available on [arXiv](https://arxiv.org/pdf/2110.00061.pdf).\
-`10/21/2021`: The full PubTables-1M dataset has been officially released on [Microsoft Research Open Data](https://msropendata.com/datasets/505fcbe3-1383-42b1-913a-f651b8b712d3).
+`11/21/2021`: Our updated paper "PubTables-1M: Towards comprehensive table extraction from unstructured documents" is available on [arXiv](https://arxiv.org/pdf/2110.00061.pdf).\
+`10/21/2021`: The full PubTables-1M dataset has been officially released on [Microsoft Research Open Data](https://msropendata.com/datasets/505fcbe3-1383-42b1-913a-f651b8b712d3).\
+`06/08/2021`: Initial version of the table-transformer project is released.
 
 ## Model Weights
 We provide the pre-trained model for table detection trained for 20 epochs on PubTables-1M.
@@ -33,7 +35,7 @@ We provide the pre-trained model for table detection trained for 20 epochs on Pu
   <thead>
     <tr style="text-align: right;">
       <th>Task</th>
-      <th>Backbone</th>
+      <th>Model</th>
       <th>Schedule</th>
       <th>AP50</th>
       <th>AP75</th>
@@ -46,7 +48,7 @@ We provide the pre-trained model for table detection trained for 20 epochs on Pu
   <tbody>
     <tr style="text-align: right;">
       <td>Table Detection</td>
-      <td>R18</td>
+      <td>DETR R18</td>
       <td>20 Epochs</td>
       <td>0.995</td>
       <td>0.989</td>
@@ -145,6 +147,14 @@ Our work can be cited using:
   title={Pub{T}ables-1{M}: Towards comprehensive table extraction from unstructured documents},
   journal={arXiv preprint arXiv:2110.00061},
   year={2021}
+}
+```
+```
+@article{smock2022grits,
+  author={Smock, Brandon and Pesala, Rohith and Abraham, Robin},
+  title={Gri{TS}: Grid table similarity metric for table structure recognition},
+  journal={arXiv preprint arXiv:2203.12555},
+  year={2022}
 }
 ```
 
