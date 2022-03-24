@@ -124,8 +124,8 @@ class RandomCrop(object):
             width, height = image.size
             left = random.randint(0, self.left_pixels)
             top = random.randint(0, self.top_pixels)
-            right =random.randint(0, self.right_pixels)
-            bottom = random.randint(0, self.bottom_pixels)
+            right = width - random.randint(0, self.right_pixels)
+            bottom = height - random.randint(0, self.bottom_pixels)
             cropped_image = image.crop((left, top, right, bottom))
             cropped_bboxes = []
             cropped_labels = []
