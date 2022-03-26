@@ -48,6 +48,13 @@ def get_args():
                         default='train',
                         help="Toggle between different modes")
     parser.add_argument('--debug', action='store_true')
+    parser.add_argument('--device', default='cuda')
+    parser.add_argument('--lr_drop', default=1, type=int)
+    parser.add_argument('--lr_gamma', default=0.9, type=float)
+    parser.add_argument('--epochs', default=20, type=int)
+    parser.add_argument('--checkpoint_freq', default=1, type=int)
+    parser.add_argument('--batch_size', default=2, type=int)
+    parser.add_argument('--num_workers', default=2, type=int)
 
     return parser.parse_args()
 
@@ -332,12 +339,16 @@ def train(args, model, criterion, postprocessors, device):
                      pubmed_stats['coco_eval_bbox'][0],
                      pubmed_stats['coco_eval_bbox'][8]))
 
+        # Save current model training progress
         torch.save({'epoch': epoch,
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     }, model_save_path)
-        model_save_path_epoch = os.path.join(output_directory, 'model_' + str(epoch+1) + '.pth')
-        torch.save(model.state_dict(), model_save_path_epoch)
+
+        # Save checkpoint for evaluation
+        if (epoch+1) % args.checkpoint_freq == 0:
+            model_save_path_epoch = os.path.join(output_directory, 'model_' + str(epoch+1) + '.pth')
+            torch.save(model.state_dict(), model_save_path_epoch)
 
     print('Total training time: ', datetime.now() - start_time)
 
