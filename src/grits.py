@@ -511,6 +511,24 @@ def output_to_dilatedbbox_grid(bboxes, labels, scores):
     return cell_grid
 
 
+def grits_top(true_relative_span_grid, pred_relative_span_grid):
+    return factored_2dlcs(true_relative_span_grid,
+                          pred_relative_span_grid,
+                          reward_function=eval_utils.iou)
+
+
+def grits_loc(true_bbox_grid, pred_bbox_grid):
+    return factored_2dlcs(true_bbox_grid,
+                          pred_bbox_grid,
+                          reward_function=eval_utils.iou)
+
+
+def grits_con(true_text_grid, pred_text_grid):
+    return factored_2dlcs(true_text_grid,
+                          pred_text_grid,
+                          reward_function=lcs_similarity)
+
+
 def compute_metrics(true_bboxes, true_labels, true_scores, true_cells,
                     pred_bboxes, pred_labels, pred_scores, pred_cells):
 
@@ -527,29 +545,30 @@ def compute_metrics(true_bboxes, true_labels, true_scores, true_cells,
 
     #---Compute each of the metrics
     metrics = {}
+
+    # Compute GriTS_RawLoc (location using unprocessed bounding boxes)
     (metrics['grits_rawloc'], metrics['grits_precision_rawloc'],
      metrics['grits_recall_rawloc'], metrics['grits_rawloc_rowbased'],
-     metrics['grits_rawloc_columnbased']) = factored_2dlcs(true_cell_dilatedbbox_grid,
-                                                pred_cell_dilatedbbox_grid,
-                                                reward_function=eval_utils.iou)
+     metrics['grits_rawloc_columnbased']) = grits_loc(true_cell_dilatedbbox_grid,
+                                                      pred_cell_dilatedbbox_grid)
 
+    # Compute GriTS_Top (topology)
     (metrics['grits_top'], metrics['grits_precision_top'],
      metrics['grits_recall_top'], metrics['grits_top_rowbased'],
-     metrics['grits_top_columnbased']) = factored_2dlcs(true_relspan_grid,
-                                             pred_relspan_grid,
-                                             reward_function=eval_utils.iou)
+     metrics['grits_top_columnbased']) = grits_top(true_relspan_grid,
+                                                   pred_relspan_grid)
 
+    # Compute GriTS_Loc (location)
     (metrics['grits_loc'], metrics['grits_precision_loc'],
      metrics['grits_recall_loc'], metrics['grits_loc_rowbased'],
-     metrics['grits_loc_columnbased']) = factored_2dlcs(true_bbox_grid,
-                                             pred_bbox_grid,
-                                             reward_function=eval_utils.iou)
+     metrics['grits_loc_columnbased']) = grits_loc(true_bbox_grid,
+                                                   pred_bbox_grid)
 
+    # Compute GriTS_Con (text content)
     (metrics['grits_con'], metrics['grits_precision_con'],
      metrics['grits_recall_con'], metrics['grits_con_rowbased'],
-     metrics['grits_con_columnbased']) = factored_2dlcs(true_text_grid,
-                                             pred_text_grid,
-                                             reward_function=lcs_similarity)
+     metrics['grits_con_columnbased']) = grits_con(true_text_grid,
+                                                   pred_text_grid)
     metrics['acc_con'] = int(metrics['grits_con'] == 1)
 
     (metrics['dar_original_recall_con'], metrics['dar_original_precision_con'],
