@@ -717,12 +717,12 @@ def grits(args, model, dataset_test, device):
         metrics['id'] = img_path.split('/')[-1].split('.')[0]
         all_metrics.append(metrics)
 
-        if (idx+1) % 1000 == 0:
+        if (idx+1) % 1000 == 0 or (idx+1) == max_samples:
             # Save sample-level metrics for more analysis
             if len(args.metrics_save_filepath) > 0:
                 with open(args.metrics_save_filepath, 'w') as outfile:
                     json.dump(all_metrics, outfile)
-            print("Total time taken for {} samples: {}".format(idx, datetime.now() - st_time))
+            print("Total time taken for {} samples: {}".format(idx+1, datetime.now() - st_time))
 
         #---Display output for debugging
         if args.debug:
@@ -830,9 +830,6 @@ def grits(args, model, dataset_test, device):
 
             fig.set_size_inches((15, 18))
             plt.show()
-    with open(args.metrics_save_filepath, 'w') as outfile:
-        json.dump(all_metrics, outfile)
-    print("Total time taken: ", datetime.now() - st_time)
 
     print('-' * 100)
     results = [result for result in all_metrics if result['num_spanning_cells'] == 0]

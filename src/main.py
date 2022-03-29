@@ -40,7 +40,8 @@ def get_args():
         help="toggle between structure recognition and table detection")
     parser.add_argument('--model_load_path', help="The path to trained model")
     parser.add_argument('--metrics_save_filepath',
-                        help="Filepath to save grits outputs")
+                        help='Filepath to save grits outputs',
+                        default='')
     parser.add_argument('--table_words_dir',
                         help="Folder containg the bboxes of table words")
     parser.add_argument('--mode',
