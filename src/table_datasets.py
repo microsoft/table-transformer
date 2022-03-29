@@ -10,7 +10,7 @@ import itertools
 import math
 
 import PIL
-from PIL import Image
+from PIL import Image, ImageFilter
 import torch
 from torchvision import transforms
 
@@ -28,9 +28,6 @@ def read_pascal_voc(xml_file: str, class_map=None):
     labels = []
 
     for object_ in root.iter('object'):
-
-        filename = root.find('filename').text
-
         ymin, xmin, ymax, xmax = None, None, None, None
         
         label = object_.find("name").text

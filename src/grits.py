@@ -4,7 +4,6 @@ Copyright (C) 2021 Microsoft Corporation
 import os
 import sys
 from collections import Counter
-import math
 import json
 import statistics as stat
 from datetime import datetime
@@ -424,6 +423,7 @@ def align_cells_outer(true_cells, pred_cells, reward_function):
         recall = score / len(true_cells)
     else:
         recall = 1
+        
     if precision + recall > 0:
         score = 2 * precision * recall / (precision + recall)
     else:
@@ -763,7 +763,7 @@ def grits(args, model, dataset_test, device):
                 rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
                                          edgecolor="orange",facecolor='none',linestyle="--")
                 ax.add_patch(rect)         
-            rescaled_bboxes = rescale_bboxes(torch.tensor(boxes[0], dtype=torch.float32), img_test.size)
+            rescaled_bboxes = rescale_bboxes(boxes[0].cpu(), img_test.size)
             for bbox, label, score in zip(rescaled_bboxes, labels[0].tolist(), scores[0].tolist()):
                 bbox = bbox.cpu().numpy().tolist()
                 if not label > 5 and score > 0.5:
