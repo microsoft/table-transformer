@@ -424,8 +424,10 @@ def align_cells_outer(true_cells, pred_cells, reward_function):
         recall = score / len(true_cells)
     else:
         recall = 1
-    score = 2 * precision * recall / (precision + recall)
-    #score = 2 * score / (len(true_cells) + len(pred_cells))
+    if precision + recall > 0:
+        score = 2 * precision * recall / (precision + recall)
+    else:
+        score = 0
     
     cur_row = len(true_cells)
     cur_col = len(pred_cells)
