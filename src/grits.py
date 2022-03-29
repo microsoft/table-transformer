@@ -548,6 +548,7 @@ def compute_metrics(true_bboxes, true_labels, true_scores, true_cells,
      metrics['grits_con_columnbased']) = factored_2dlcs(true_text_grid,
                                              pred_text_grid,
                                              reward_function=lcs_similarity)
+    metrics['acc_con'] = int(metrics['grits_con'] == 1)
 
     (metrics['dar_original_recall_con'], metrics['dar_original_precision_con'],
      metrics['dar_original_con']) = adjacency_metric(true_cells, pred_cells)
@@ -841,6 +842,7 @@ def grits(args, model, dataset_test, device):
     print("                 GriTS_Top: {:.4f}".format(np.mean([result['grits_top'] for result in results])))
     print("DAR_Con (original version): {:.4f}".format(np.mean([result['dar_original_con'] for result in results])))
     print("                   DAR_Con: {:.4f}".format(np.mean([result['dar_con'] for result in results])))
+    print("              Accuracy_Con: {:.4f}".format(np.mean([result['acc_con'] for result in results])))
 
     print('-' * 50)
     results = [result for result in all_metrics if result['num_spanning_cells'] > 0]
@@ -851,6 +853,7 @@ def grits(args, model, dataset_test, device):
     print("                 GriTS_Top: {:.4f}".format(np.mean([result['grits_top'] for result in results])))
     print("DAR_Con (original version): {:.4f}".format(np.mean([result['dar_original_con'] for result in results])))
     print("                   DAR_Con: {:.4f}".format(np.mean([result['dar_con'] for result in results])))
+    print("              Accuracy_Con: {:.4f}".format(np.mean([result['acc_con'] for result in results])))
 
     print('-' * 50)
     results = [result for result in all_metrics]
@@ -861,6 +864,7 @@ def grits(args, model, dataset_test, device):
     print("                 GriTS_Top: {:.4f}".format(np.mean([result['grits_top'] for result in results])))
     print("DAR_Con (original version): {:.4f}".format(np.mean([result['dar_original_con'] for result in results])))
     print("                   DAR_Con: {:.4f}".format(np.mean([result['dar_con'] for result in results])))
+    print("              Accuracy_Con: {:.4f}".format(np.mean([result['acc_con'] for result in results])))
     print('-' * 50)
     # We can plot the graphs to see the correlation between different variations
     # of similarity metrics by using plot_graph fn as shown below
