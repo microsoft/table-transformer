@@ -2,41 +2,22 @@
 Copyright (C) 2021 Microsoft Corporation
 """
 import os
-import argparse
 import sys
-import random
-import time
-import xml.etree.ElementTree as ET
-from collections import Counter, defaultdict
-import itertools
-import math
+from collections import Counter
 import json
-import traceback
 import statistics as stat
-from tqdm import tqdm
 from datetime import datetime
 from difflib import SequenceMatcher
 
 import torch
-from torch.utils.data import DataLoader, DistributedSampler, Subset, ConcatDataset
 from torchvision import transforms
 import numpy as np
-import PIL
-from PIL import Image, ImageFilter
 import matplotlib.pyplot as plt
-from matplotlib.pyplot import imshow
 import matplotlib.patches as patches
-import fitz
 from fitz import Rect
 
 sys.path.append("../detr")
-from engine import evaluate
-from models import build_model
-import util.misc as utils
-import datasets.transforms as R
-from datasets.coco_eval import CocoEvaluator
 import eval_utils
-from table_datasets import PDFTablesDataset, RandomMaxResize
 
 
 def transpose(matrix):
@@ -442,8 +423,11 @@ def align_cells_outer(true_cells, pred_cells, reward_function):
         recall = score / len(true_cells)
     else:
         recall = 1
-    score = 2 * precision * recall / (precision + recall)
-    #score = 2 * score / (len(true_cells) + len(pred_cells))
+        
+    if precision + recall > 0:
+        score = 2 * precision * recall / (precision + recall)
+    else:
+        score = 0
     
     cur_row = len(true_cells)
     cur_col = len(pred_cells)
@@ -561,17 +545,18 @@ def compute_metrics(true_bboxes, true_labels, true_scores, true_cells,
                                              pred_bbox_grid,
                                              reward_function=eval_utils.iou)
 
-    (metrics['grits_cont'], metrics['grits_precision_cont'],
-     metrics['grits_recall_cont'], metrics['grits_cont_rowbased'],
-     metrics['grits_cont_columnbased']) = factored_2dlcs(true_text_grid,
+    (metrics['grits_con'], metrics['grits_precision_con'],
+     metrics['grits_recall_con'], metrics['grits_con_rowbased'],
+     metrics['grits_con_columnbased']) = factored_2dlcs(true_text_grid,
                                              pred_text_grid,
                                              reward_function=lcs_similarity)
+    metrics['acc_con'] = int(metrics['grits_con'] == 1)
 
-    (metrics['adjacency_nonblank_recall'], metrics['adjacency_nonblank_precision'],
-     metrics['adjacency_nonblank_fscore']) = adjacency_metric(true_cells, pred_cells)
+    (metrics['dar_original_recall_con'], metrics['dar_original_precision_con'],
+     metrics['dar_original_con']) = adjacency_metric(true_cells, pred_cells)
 
-    (metrics['adjacency_withblank_recall'], metrics['adjacency_withblank_precision'],
-     metrics['adjacency_withblank_fscore']) = adjacency_with_blanks_metric(true_cells, pred_cells)
+    (metrics['dar_recall_con'], metrics['dar_precision_con'],
+     metrics['dar_con']) = adjacency_with_blanks_metric(true_cells, pred_cells)
 
     return metrics
 
@@ -652,6 +637,21 @@ def plot_graph(metric_1, metric_2, metric_1_name, metric_2_name):
     plt.show()
 
 
+def print_metrics_summary(table_type, sample_metrics):
+    """
+    Print a formatted summary of the table structure recognition metrics
+    averaged over all samples.
+    """
+    print("Results on {} tables ({} total):".format(table_type, len(sample_metrics)))
+    print("              GriTS_RawLoc: {:.4f}".format(np.mean([elem['grits_rawloc'] for elem in sample_metrics])))
+    print("                 GriTS_Loc: {:.4f}".format(np.mean([elem['grits_loc'] for elem in sample_metrics])))
+    print("                 GriTS_Con: {:.4f}".format(np.mean([elem['grits_con'] for elem in sample_metrics])))
+    print("                 GriTS_Top: {:.4f}".format(np.mean([elem['grits_top'] for elem in sample_metrics])))
+    print("DAR_Con (original version): {:.4f}".format(np.mean([elem['dar_original_con'] for elem in sample_metrics])))
+    print("                   DAR_Con: {:.4f}".format(np.mean([elem['dar_con'] for elem in sample_metrics])))
+    print("              Accuracy_Con: {:.4f}".format(np.mean([elem['acc_con'] for elem in sample_metrics])))
+
+
 def grits(args, model, dataset_test, device):
     """
     This function runs the GriTS proposed in the paper. We also have a debug
@@ -673,10 +673,10 @@ def grits(args, model, dataset_test, device):
     }
 
     if args.debug:
-        max_samples = 50
+        max_samples = min(50, len(dataset_test))
     else:
         max_samples = len(dataset_test)
-    print(max_samples)
+    print("Evaluating {} samples...".format(max_samples))
 
     normalize = transforms.Compose([
         transforms.ToTensor(),
@@ -735,19 +735,15 @@ def grits(args, model, dataset_test, device):
         metrics['id'] = img_path.split('/')[-1].split('.')[0]
         all_metrics.append(metrics)
 
-        if idx%1000==0:
-            with open(args.metrics_save_filepath, 'w') as outfile:
-                json.dump(all_metrics, outfile)
-            print("Total time taken for {} samples: {}".format(idx, datetime.now() - st_time))
-
         #---Display output for debugging
         if args.debug:
-            print("GriTS RawLoc: {}".format(metrics["grits_rawloc"]))
-            print("GriTS Loc: {}".format(metrics["grits_loc"]))
-            print("GriTS Top: {}".format(metrics["grits_top"]))
-            print("GriTS Cont: {}".format(metrics["grits_cont"]))
-            print("Adjacency f-score: {}".format(metrics["adjacency_nonblank_fscore"]))
-            print("Adjacency w/ blanks f-score: {}".format(metrics["adjacency_withblank_fscore"]))
+            print("Sample {}:".format(idx+1))
+            print("              GriTS_RawLoc: {:.4f}".format(metrics["grits_rawloc"]))
+            print("                 GriTS_Loc: {:.4f}".format(metrics["grits_loc"]))
+            print("                 GriTS_Con: {:.4f}".format(metrics["grits_con"]))
+            print("                 GriTS_Top: {:.4f}".format(metrics["grits_top"]))
+            print("DAR_Con (original version): {:.4f}".format(metrics["dar_original_con"]))
+            print("                   DAR_Con: {:.4f}".format(metrics["dar_con"]))
 
             fig,ax = plt.subplots(1)
             ax.imshow(img_test, interpolation='lanczos')
@@ -767,7 +763,7 @@ def grits(args, model, dataset_test, device):
                 rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
                                          edgecolor="orange",facecolor='none',linestyle="--")
                 ax.add_patch(rect)         
-            rescaled_bboxes = rescale_bboxes(torch.tensor(boxes[0], dtype=torch.float32), img_test.size)
+            rescaled_bboxes = rescale_bboxes(boxes[0].cpu(), img_test.size)
             for bbox, label, score in zip(rescaled_bboxes, labels[0].tolist(), scores[0].tolist()):
                 bbox = bbox.cpu().numpy().tolist()
                 if not label > 5 and score > 0.5:
@@ -846,39 +842,29 @@ def grits(args, model, dataset_test, device):
 
             fig.set_size_inches((15, 18))
             plt.show()
-    with open(args.metrics_save_filepath, 'w') as outfile:
-        json.dump(all_metrics, outfile)
-    print("Total time taken: ", datetime.now() - st_time)
+
+        if (idx+1) % 1000 == 0 or (idx+1) == max_samples:
+            # Save sample-level metrics for more analysis
+            if len(args.metrics_save_filepath) > 0:
+                with open(args.metrics_save_filepath, 'w') as outfile:
+                    json.dump(all_metrics, outfile)
+            print("Total time taken for {} samples: {}".format(idx+1, datetime.now() - st_time))
 
     print('-' * 100)
-    results = [result for result in all_metrics if result['num_spanning_cells'] == 0]
-    print("Results on simple tables ({} total):".format(len(results)))
-    print("GriTS_RawLoc: {}".format(np.mean([result['grits_rawloc'] for result in results])))
-    print("GriTS_Loc: {}".format(np.mean([result['grits_loc'] for result in results])))
-    print("GriTS_Cont: {}".format(np.mean([result['grits_cont'] for result in results])))
-    print("GriTS_Top: {}".format(np.mean([result['grits_top'] for result in results])))
-    print("Adjacency f-score: {}".format(np.mean([result['adjacency_nonblank_fscore'] for result in results])))
-    print("Adjacency w/ blanks f-score: {}".format(np.mean([result['adjacency_withblank_fscore'] for result in results])))
+    # Print metrics summary for simple tables
+    sample_metrics = [result for result in all_metrics if result['num_spanning_cells'] == 0]
+    print_metrics_summary('simple', sample_metrics)
 
     print('-' * 50)
-    results = [result for result in all_metrics if result['num_spanning_cells'] > 0]
-    print("Results on complicated tables ({} total):".format(len(results)))
-    print("GriTS_RawLoc: {}".format(np.mean([result['grits_rawloc'] for result in results])))
-    print("GriTS_Loc: {}".format(np.mean([result['grits_loc'] for result in results])))
-    print("GriTS_Cont: {}".format(np.mean([result['grits_cont'] for result in results])))
-    print("GriTS_Top: {}".format(np.mean([result['grits_top'] for result in results])))
-    print("Adjacency f-score: {}".format(np.mean([result['adjacency_nonblank_fscore'] for result in results])))
-    print("Adjacency w/ blanks f-score: {}".format(np.mean([result['adjacency_withblank_fscore'] for result in results])))
+    # Print metrics summary for complex tables
+    sample_metrics = [result for result in all_metrics if result['num_spanning_cells'] > 0]
+    print_metrics_summary('complex', sample_metrics)
 
     print('-' * 50)
-    results = [result for result in all_metrics]
-    print("Results on all tables ({} total):".format(len(results)))
-    print("GriTS_RawLoc: {}".format(np.mean([result['grits_rawloc'] for result in results if not math.isnan(result['grits_rawloc'])])))
-    print("GriTS_Loc: {}".format(np.mean([result['grits_loc'] for result in results])))
-    print("GriTS_Cont: {}".format(np.mean([result['grits_cont'] for result in results])))
-    print("GriTS_Top: {}".format(np.mean([result['grits_top'] for result in results])))
-    print("Adjacency f-score: {}".format(np.mean([result['adjacency_nonblank_fscore'] for result in results])))
-    print("Adjacency w/ blanks f-score: {}".format(np.mean([result['adjacency_withblank_fscore'] for result in results])))
+    # Print metrics summary for all tables
+    print_metrics_summary('all', all_metrics)
+    print('-' * 50)
+
     # We can plot the graphs to see the correlation between different variations
     # of similarity metrics by using plot_graph fn as shown below
     #

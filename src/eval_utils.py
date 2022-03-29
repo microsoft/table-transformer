@@ -38,7 +38,12 @@ def iou(bbox1, bbox2):
     """
     intersection = Rect(bbox1).intersect(bbox2)
     union = Rect(bbox1).includeRect(bbox2)
-    return intersection.getArea() / union.getArea()
+    
+    union_area = union.getArea()
+    if union_area > 0:
+        return intersection.getArea() / union.getArea()
+    
+    return 0
 
 
 def iob(bbox1, bbox2):
@@ -46,7 +51,12 @@ def iob(bbox1, bbox2):
     Compute the intersection area over box area, for bbox1.
     """
     intersection = Rect(bbox1).intersect(bbox2)
-    return intersection.getArea() / Rect(bbox1).getArea()
+    
+    bbox1_area = Rect(bbox1).getArea()
+    if bbox1_area > 0:
+        return intersection.getArea() / bbox1_area
+    
+    return 0
 
 
 def objects_to_cells(table, objects_in_table, tokens_in_table, class_map, class_thresholds):

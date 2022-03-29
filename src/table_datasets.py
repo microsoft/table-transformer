@@ -7,18 +7,16 @@ import random
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 import itertools
-import numpy as np
-import PIL
-from PIL import Image
 import math
+
+import PIL
+from PIL import Image, ImageFilter
 import torch
 from torchvision import transforms
 
-# Custom scripts to import
+# Project imports
 sys.path.append("detr")
-import util.misc as utils
 import datasets.transforms as R
-import transforms as T
 
 
 def read_pascal_voc(xml_file: str, class_map=None):
@@ -30,9 +28,6 @@ def read_pascal_voc(xml_file: str, class_map=None):
     labels = []
 
     for object_ in root.iter('object'):
-
-        filename = root.find('filename').text
-
         ymin, xmin, ymax, xmax = None, None, None, None
         
         label = object_.find("name").text
@@ -318,9 +313,9 @@ class PDFTablesDataset(torch.utils.data.Dataset):
             lines = os.listdir(image_directory)
         png_page_ids = set([f.strip().replace(self.image_extension, "") for f in lines if f.strip().endswith(self.image_extension)])
         
-        self.page_ids = list(xml_page_ids.intersection(png_page_ids))
+        self.page_ids = sorted(xml_page_ids.intersection(png_page_ids))
         if not max_size is None:
-            self.page_ids = random.sample(self.page_ids, max_size)
+            self.page_ids = self.page_ids[:max_size]
         num_page_ids = len(self.page_ids)
         self.types = [1 for idx in range(num_page_ids)]
             
@@ -328,9 +323,9 @@ class PDFTablesDataset(torch.utils.data.Dataset):
             with open(os.path.join(negatives_root, "filelist.txt"), 'r') as file:
                 neg_xml_page_ids = set([f.strip().replace(".xml", "") for f in file.readlines() if f.strip().endswith(".xml")])
                 neg_xml_page_ids = neg_xml_page_ids.intersection(png_page_ids)
-                neg_xml_page_ids = list(neg_xml_page_ids.difference(set(self.page_ids)))
+                neg_xml_page_ids = sorted(neg_xml_page_ids.difference(set(self.page_ids)))
                 if len(neg_xml_page_ids) > max_neg:
-                    neg_xml_page_ids = random.sample(neg_xml_page_ids, max_neg)
+                    neg_xml_page_ids = neg_xml_page_ids[:max_neg]
             self.page_ids += neg_xml_page_ids
             self.types += [0 for idx in range(len(neg_xml_page_ids))]
         
