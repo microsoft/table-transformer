@@ -719,12 +719,13 @@ def grits(args, model, dataset_test, device):
 
         #---Display output for debugging
         if args.debug:
-            print("GriTS_RawLoc: {}".format(metrics["grits_rawloc"]))
-            print("GriTS_Loc: {}".format(metrics["grits_loc"]))
-            print("GriTS_Con: {}".format(metrics["grits_cont"]))
-            print("GriTS_Top: {}".format(metrics["grits_top"]))
-            print("DAR_Con (original version): {}".format(metrics["adjacency_nonblank_fscore"]))
-            print("DAR_Con: {}".format(metrics["adjacency_withblank_fscore"]))
+            print("Sample {}:".format(idx+1))
+            print("              GriTS_RawLoc: {:.4f}".format(metrics["grits_rawloc"]))
+            print("                 GriTS_Loc: {:.4f}".format(metrics["grits_loc"]))
+            print("                 GriTS_Con: {:.4f}".format(metrics["grits_cont"]))
+            print("                 GriTS_Top: {:.4f}".format(metrics["grits_top"]))
+            print("DAR_Con (original version): {:.4f}".format(metrics["adjacency_nonblank_fscore"]))
+            print("                   DAR_Con: {:.4f}".format(metrics["adjacency_withblank_fscore"]))
 
             fig,ax = plt.subplots(1)
             ax.imshow(img_test, interpolation='lanczos')
