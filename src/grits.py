@@ -543,17 +543,17 @@ def compute_metrics(true_bboxes, true_labels, true_scores, true_cells,
                                              pred_bbox_grid,
                                              reward_function=eval_utils.iou)
 
-    (metrics['grits_cont'], metrics['grits_precision_cont'],
-     metrics['grits_recall_cont'], metrics['grits_cont_rowbased'],
-     metrics['grits_cont_columnbased']) = factored_2dlcs(true_text_grid,
+    (metrics['grits_con'], metrics['grits_precision_con'],
+     metrics['grits_recall_con'], metrics['grits_con_rowbased'],
+     metrics['grits_con_columnbased']) = factored_2dlcs(true_text_grid,
                                              pred_text_grid,
                                              reward_function=lcs_similarity)
 
-    (metrics['adjacency_nonblank_recall'], metrics['adjacency_nonblank_precision'],
-     metrics['adjacency_nonblank_fscore']) = adjacency_metric(true_cells, pred_cells)
+    (metrics['dar_original_recall_con'], metrics['dar_original_precision_con'],
+     metrics['dar_original_con']) = adjacency_metric(true_cells, pred_cells)
 
-    (metrics['adjacency_withblank_recall'], metrics['adjacency_withblank_precision'],
-     metrics['adjacency_withblank_fscore']) = adjacency_with_blanks_metric(true_cells, pred_cells)
+    (metrics['dar_recall_con'], metrics['dar_precision_con'],
+     metrics['dar_con']) = adjacency_with_blanks_metric(true_cells, pred_cells)
 
     return metrics
 
@@ -722,10 +722,10 @@ def grits(args, model, dataset_test, device):
             print("Sample {}:".format(idx+1))
             print("              GriTS_RawLoc: {:.4f}".format(metrics["grits_rawloc"]))
             print("                 GriTS_Loc: {:.4f}".format(metrics["grits_loc"]))
-            print("                 GriTS_Con: {:.4f}".format(metrics["grits_cont"]))
+            print("                 GriTS_Con: {:.4f}".format(metrics["grits_con"]))
             print("                 GriTS_Top: {:.4f}".format(metrics["grits_top"]))
-            print("DAR_Con (original version): {:.4f}".format(metrics["adjacency_nonblank_fscore"]))
-            print("                   DAR_Con: {:.4f}".format(metrics["adjacency_withblank_fscore"]))
+            print("DAR_Con (original version): {:.4f}".format(metrics["dar_original_con"]))
+            print("                   DAR_Con: {:.4f}".format(metrics["dar_con"]))
 
             fig,ax = plt.subplots(1)
             ax.imshow(img_test, interpolation='lanczos')
@@ -837,30 +837,30 @@ def grits(args, model, dataset_test, device):
     print("Results on simple tables ({} total):".format(len(results)))
     print("              GriTS_RawLoc: {:.4f}".format(np.mean([result['grits_rawloc'] for result in results])))
     print("                 GriTS_Loc: {:.4f}".format(np.mean([result['grits_loc'] for result in results])))
-    print("                 GriTS_Con: {:.4f}".format(np.mean([result['grits_cont'] for result in results])))
+    print("                 GriTS_Con: {:.4f}".format(np.mean([result['grits_con'] for result in results])))
     print("                 GriTS_Top: {:.4f}".format(np.mean([result['grits_top'] for result in results])))
-    print("DAR_Con (original version): {:.4f}".format(np.mean([result['adjacency_nonblank_fscore'] for result in results])))
-    print("                   DAR_Con: {:.4f}".format(np.mean([result['adjacency_withblank_fscore'] for result in results])))
+    print("DAR_Con (original version): {:.4f}".format(np.mean([result['dar_original_con'] for result in results])))
+    print("                   DAR_Con: {:.4f}".format(np.mean([result['dar_con'] for result in results])))
 
     print('-' * 50)
     results = [result for result in all_metrics if result['num_spanning_cells'] > 0]
     print("Results on complex tables ({} total):".format(len(results)))
     print("              GriTS_RawLoc: {:.4f}".format(np.mean([result['grits_rawloc'] for result in results])))
     print("                 GriTS_Loc: {:.4f}".format(np.mean([result['grits_loc'] for result in results])))
-    print("                 GriTS_Con: {:.4f}".format(np.mean([result['grits_cont'] for result in results])))
+    print("                 GriTS_Con: {:.4f}".format(np.mean([result['grits_con'] for result in results])))
     print("                 GriTS_Top: {:.4f}".format(np.mean([result['grits_top'] for result in results])))
-    print("DAR_Con (original version): {:.4f}".format(np.mean([result['adjacency_nonblank_fscore'] for result in results])))
-    print("                   DAR_Con: {:.4f}".format(np.mean([result['adjacency_withblank_fscore'] for result in results])))
+    print("DAR_Con (original version): {:.4f}".format(np.mean([result['dar_original_con'] for result in results])))
+    print("                   DAR_Con: {:.4f}".format(np.mean([result['dar_con'] for result in results])))
 
     print('-' * 50)
     results = [result for result in all_metrics]
     print("Results on all tables ({} total):".format(len(results)))
     print("              GriTS_RawLoc: {:.4f}".format(np.mean([result['grits_rawloc'] for result in results if not math.isnan(result['grits_rawloc'])])))
     print("                 GriTS_Loc: {:.4f}".format(np.mean([result['grits_loc'] for result in results])))
-    print("                 GriTS_Con: {:.4f}".format(np.mean([result['grits_cont'] for result in results])))
+    print("                 GriTS_Con: {:.4f}".format(np.mean([result['grits_con'] for result in results])))
     print("                 GriTS_Top: {:.4f}".format(np.mean([result['grits_top'] for result in results])))
-    print("DAR_Con (original version): {:.4f}".format(np.mean([result['adjacency_nonblank_fscore'] for result in results])))
-    print("                   DAR_Con: {:.4f}".format(np.mean([result['adjacency_withblank_fscore'] for result in results])))
+    print("DAR_Con (original version): {:.4f}".format(np.mean([result['dar_original_con'] for result in results])))
+    print("                   DAR_Con: {:.4f}".format(np.mean([result['dar_con'] for result in results])))
     print('-' * 50)
     # We can plot the graphs to see the correlation between different variations
     # of similarity metrics by using plot_graph fn as shown below
