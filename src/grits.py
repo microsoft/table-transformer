@@ -726,12 +726,12 @@ def grits(args, model, dataset_test, device):
 
         #---Display output for debugging
         if args.debug:
-            print("GriTS RawLoc: {}".format(metrics["grits_rawloc"]))
-            print("GriTS Loc: {}".format(metrics["grits_loc"]))
-            print("GriTS Top: {}".format(metrics["grits_top"]))
-            print("GriTS Cont: {}".format(metrics["grits_cont"]))
-            print("Adjacency f-score: {}".format(metrics["adjacency_nonblank_fscore"]))
-            print("Adjacency w/ blanks f-score: {}".format(metrics["adjacency_withblank_fscore"]))
+            print("GriTS_RawLoc: {}".format(metrics["grits_rawloc"]))
+            print("GriTS_Loc: {}".format(metrics["grits_loc"]))
+            print("GriTS_Con: {}".format(metrics["grits_cont"]))
+            print("GriTS_Top: {}".format(metrics["grits_top"]))
+            print("DAR_Con (original version): {}".format(metrics["adjacency_nonblank_fscore"]))
+            print("DAR_Con: {}".format(metrics["adjacency_withblank_fscore"]))
 
             fig,ax = plt.subplots(1)
             ax.imshow(img_test, interpolation='lanczos')
@@ -836,20 +836,20 @@ def grits(args, model, dataset_test, device):
     print("Results on simple tables ({} total):".format(len(results)))
     print("GriTS_RawLoc: {}".format(np.mean([result['grits_rawloc'] for result in results])))
     print("GriTS_Loc: {}".format(np.mean([result['grits_loc'] for result in results])))
-    print("GriTS_Cont: {}".format(np.mean([result['grits_cont'] for result in results])))
+    print("GriTS_Con: {}".format(np.mean([result['grits_cont'] for result in results])))
     print("GriTS_Top: {}".format(np.mean([result['grits_top'] for result in results])))
-    print("Adjacency f-score: {}".format(np.mean([result['adjacency_nonblank_fscore'] for result in results])))
-    print("Adjacency w/ blanks f-score: {}".format(np.mean([result['adjacency_withblank_fscore'] for result in results])))
+    print("DAR_Con (original version): {}".format(np.mean([result['adjacency_nonblank_fscore'] for result in results])))
+    print("DAR_Con: {}".format(np.mean([result['adjacency_withblank_fscore'] for result in results])))
 
     print('-' * 50)
     results = [result for result in all_metrics if result['num_spanning_cells'] > 0]
-    print("Results on complicated tables ({} total):".format(len(results)))
+    print("Results on complex tables ({} total):".format(len(results)))
     print("GriTS_RawLoc: {}".format(np.mean([result['grits_rawloc'] for result in results])))
     print("GriTS_Loc: {}".format(np.mean([result['grits_loc'] for result in results])))
-    print("GriTS_Cont: {}".format(np.mean([result['grits_cont'] for result in results])))
+    print("GriTS_Con: {}".format(np.mean([result['grits_cont'] for result in results])))
     print("GriTS_Top: {}".format(np.mean([result['grits_top'] for result in results])))
-    print("Adjacency f-score: {}".format(np.mean([result['adjacency_nonblank_fscore'] for result in results])))
-    print("Adjacency w/ blanks f-score: {}".format(np.mean([result['adjacency_withblank_fscore'] for result in results])))
+    print("DAR_Con (original version): {}".format(np.mean([result['adjacency_nonblank_fscore'] for result in results])))
+    print("DAR_Con: {}".format(np.mean([result['adjacency_withblank_fscore'] for result in results])))
 
     print('-' * 50)
     results = [result for result in all_metrics]
@@ -858,8 +858,8 @@ def grits(args, model, dataset_test, device):
     print("GriTS_Loc: {}".format(np.mean([result['grits_loc'] for result in results])))
     print("GriTS_Cont: {}".format(np.mean([result['grits_cont'] for result in results])))
     print("GriTS_Top: {}".format(np.mean([result['grits_top'] for result in results])))
-    print("Adjacency f-score: {}".format(np.mean([result['adjacency_nonblank_fscore'] for result in results])))
-    print("Adjacency w/ blanks f-score: {}".format(np.mean([result['adjacency_withblank_fscore'] for result in results])))
+    print("DAR_Con (original version): {}".format(np.mean([result['adjacency_nonblank_fscore'] for result in results])))
+    print("DAR_Con: {}".format(np.mean([result['adjacency_withblank_fscore'] for result in results])))
     # We can plot the graphs to see the correlation between different variations
     # of similarity metrics by using plot_graph fn as shown below
     #
