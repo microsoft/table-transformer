@@ -2,41 +2,23 @@
 Copyright (C) 2021 Microsoft Corporation
 """
 import os
-import argparse
 import sys
-import random
-import time
-import xml.etree.ElementTree as ET
-from collections import Counter, defaultdict
-import itertools
+from collections import Counter
 import math
 import json
-import traceback
 import statistics as stat
-from tqdm import tqdm
 from datetime import datetime
 from difflib import SequenceMatcher
 
 import torch
-from torch.utils.data import DataLoader, DistributedSampler, Subset, ConcatDataset
 from torchvision import transforms
 import numpy as np
-import PIL
-from PIL import Image, ImageFilter
 import matplotlib.pyplot as plt
-from matplotlib.pyplot import imshow
 import matplotlib.patches as patches
-import fitz
 from fitz import Rect
 
 sys.path.append("../detr")
-from engine import evaluate
-from models import build_model
-import util.misc as utils
-import datasets.transforms as R
-from datasets.coco_eval import CocoEvaluator
 import eval_utils
-from table_datasets import PDFTablesDataset, RandomMaxResize
 
 
 def transpose(matrix):
@@ -735,9 +717,11 @@ def grits(args, model, dataset_test, device):
         metrics['id'] = img_path.split('/')[-1].split('.')[0]
         all_metrics.append(metrics)
 
-        if idx%1000==0:
-            with open(args.metrics_save_filepath, 'w') as outfile:
-                json.dump(all_metrics, outfile)
+        if (idx+1) % 1000 == 0:
+            # Save sample-level metrics for more analysis
+            if len(args.metrics_save_filepath) > 0:
+                with open(args.metrics_save_filepath, 'w') as outfile:
+                    json.dump(all_metrics, outfile)
             print("Total time taken for {} samples: {}".format(idx, datetime.now() - st_time))
 
         #---Display output for debugging

@@ -7,18 +7,16 @@ import random
 import xml.etree.ElementTree as ET
 from collections import defaultdict
 import itertools
-import numpy as np
+import math
+
 import PIL
 from PIL import Image
-import math
 import torch
 from torchvision import transforms
 
-# Custom scripts to import
+# Project imports
 sys.path.append("detr")
-import util.misc as utils
 import datasets.transforms as R
-import transforms as T
 
 
 def read_pascal_voc(xml_file: str, class_map=None):
