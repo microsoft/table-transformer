@@ -635,6 +635,21 @@ def plot_graph(metric_1, metric_2, metric_1_name, metric_2_name):
     plt.show()
 
 
+def print_metrics_summary(table_type, sample_metrics):
+    """
+    Print a formatted summary of the table structure recognition metrics
+    averaged over all samples.
+    """
+    print("Results on {} tables ({} total):".format(table_type, len(sample_metrics)))
+    print("              GriTS_RawLoc: {:.4f}".format(np.mean([elem['grits_rawloc'] for elem in sample_metrics])))
+    print("                 GriTS_Loc: {:.4f}".format(np.mean([elem['grits_loc'] for elem in sample_metrics])))
+    print("                 GriTS_Con: {:.4f}".format(np.mean([elem['grits_con'] for elem in sample_metrics])))
+    print("                 GriTS_Top: {:.4f}".format(np.mean([elem['grits_top'] for elem in sample_metrics])))
+    print("DAR_Con (original version): {:.4f}".format(np.mean([elem['dar_original_con'] for elem in sample_metrics])))
+    print("                   DAR_Con: {:.4f}".format(np.mean([elem['dar_con'] for elem in sample_metrics])))
+    print("              Accuracy_Con: {:.4f}".format(np.mean([elem['acc_con'] for elem in sample_metrics])))
+
+
 def grits(args, model, dataset_test, device):
     """
     This function runs the GriTS proposed in the paper. We also have a debug
@@ -834,38 +849,20 @@ def grits(args, model, dataset_test, device):
             print("Total time taken for {} samples: {}".format(idx+1, datetime.now() - st_time))
 
     print('-' * 100)
-    results = [result for result in all_metrics if result['num_spanning_cells'] == 0]
-    print("Results on simple tables ({} total):".format(len(results)))
-    print("              GriTS_RawLoc: {:.4f}".format(np.mean([result['grits_rawloc'] for result in results])))
-    print("                 GriTS_Loc: {:.4f}".format(np.mean([result['grits_loc'] for result in results])))
-    print("                 GriTS_Con: {:.4f}".format(np.mean([result['grits_con'] for result in results])))
-    print("                 GriTS_Top: {:.4f}".format(np.mean([result['grits_top'] for result in results])))
-    print("DAR_Con (original version): {:.4f}".format(np.mean([result['dar_original_con'] for result in results])))
-    print("                   DAR_Con: {:.4f}".format(np.mean([result['dar_con'] for result in results])))
-    print("              Accuracy_Con: {:.4f}".format(np.mean([result['acc_con'] for result in results])))
+    # Print metrics summary for simple tables
+    sample_metrics = [result for result in all_metrics if result['num_spanning_cells'] == 0]
+    print_metrics_summary('simple', sample_metrics)
 
     print('-' * 50)
-    results = [result for result in all_metrics if result['num_spanning_cells'] > 0]
-    print("Results on complex tables ({} total):".format(len(results)))
-    print("              GriTS_RawLoc: {:.4f}".format(np.mean([result['grits_rawloc'] for result in results])))
-    print("                 GriTS_Loc: {:.4f}".format(np.mean([result['grits_loc'] for result in results])))
-    print("                 GriTS_Con: {:.4f}".format(np.mean([result['grits_con'] for result in results])))
-    print("                 GriTS_Top: {:.4f}".format(np.mean([result['grits_top'] for result in results])))
-    print("DAR_Con (original version): {:.4f}".format(np.mean([result['dar_original_con'] for result in results])))
-    print("                   DAR_Con: {:.4f}".format(np.mean([result['dar_con'] for result in results])))
-    print("              Accuracy_Con: {:.4f}".format(np.mean([result['acc_con'] for result in results])))
+    # Print metrics summary for complex tables
+    sample_metrics = [result for result in all_metrics if result['num_spanning_cells'] > 0]
+    print_metrics_summary('complex', sample_metrics)
 
     print('-' * 50)
-    results = [result for result in all_metrics]
-    print("Results on all tables ({} total):".format(len(results)))
-    print("              GriTS_RawLoc: {:.4f}".format(np.mean([result['grits_rawloc'] for result in results if not math.isnan(result['grits_rawloc'])])))
-    print("                 GriTS_Loc: {:.4f}".format(np.mean([result['grits_loc'] for result in results])))
-    print("                 GriTS_Con: {:.4f}".format(np.mean([result['grits_con'] for result in results])))
-    print("                 GriTS_Top: {:.4f}".format(np.mean([result['grits_top'] for result in results])))
-    print("DAR_Con (original version): {:.4f}".format(np.mean([result['dar_original_con'] for result in results])))
-    print("                   DAR_Con: {:.4f}".format(np.mean([result['dar_con'] for result in results])))
-    print("              Accuracy_Con: {:.4f}".format(np.mean([result['acc_con'] for result in results])))
+    # Print metrics summary for all tables
+    print_metrics_summary('all', all_metrics)
     print('-' * 50)
+
     # We can plot the graphs to see the correlation between different variations
     # of similarity metrics by using plot_graph fn as shown below
     #
