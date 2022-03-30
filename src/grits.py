@@ -418,12 +418,12 @@ def align_cells_outer(true_cells, pred_cells, reward_lookup):
                 pointers[row_idx, col_idx] = 1
     
     score = scores[len(true_cells), len(pred_cells)]
-    if len(pred_cells) > 0:
-        precision = score / len(pred_cells)
+    if len(pred_cells) > 0 and len(pred_cells[0]) > 0:
+        precision = score / (len(pred_cells) * len(pred_cells[0]))
     else:
         precision = 1
-    if len(true_cells) > 0:
-        recall = score / len(true_cells)
+    if len(true_cells) > 0 and len(true_cells[0]) > 0:
+        recall = score / (len(true_cells) * len(true_cells[0]))
     else:
         recall = 1
         
@@ -492,8 +492,10 @@ def factored_2dlcs(true_cell_grid, pred_cell_grid, reward_function):
         fscore = 2 * precision * recall / (precision + recall)
     else:
         fscore = 0
+
+    upper_bound_score = min(row_score, column_score)
     
-    return fscore, precision, recall, row_score, column_score
+    return fscore, precision, recall, upper_bound_score
 
 
 def lcs_similarity(string1, string2):
@@ -562,27 +564,31 @@ def compute_metrics(true_bboxes, true_labels, true_scores, true_cells,
     metrics = {}
 
     # Compute GriTS_RawLoc (location using unprocessed bounding boxes)
-    (metrics['grits_rawloc'], metrics['grits_precision_rawloc'],
-     metrics['grits_recall_rawloc'], metrics['grits_rawloc_rowbased'],
-     metrics['grits_rawloc_columnbased']) = grits_loc(true_cell_dilatedbbox_grid,
+    (metrics['grits_rawloc'],
+     metrics['grits_precision_rawloc'],
+     metrics['grits_recall_rawloc'],
+     metrics['grits_rawloc_upper_bound']) = grits_loc(true_cell_dilatedbbox_grid,
                                                       pred_cell_dilatedbbox_grid)
 
     # Compute GriTS_Top (topology)
-    (metrics['grits_top'], metrics['grits_precision_top'],
-     metrics['grits_recall_top'], metrics['grits_top_rowbased'],
-     metrics['grits_top_columnbased']) = grits_top(true_relspan_grid,
+    (metrics['grits_top'],
+     metrics['grits_precision_top'],
+     metrics['grits_recall_top'],
+     metrics['grits_top_upper_bound']) = grits_top(true_relspan_grid,
                                                    pred_relspan_grid)
 
     # Compute GriTS_Loc (location)
-    (metrics['grits_loc'], metrics['grits_precision_loc'],
-     metrics['grits_recall_loc'], metrics['grits_loc_rowbased'],
-     metrics['grits_loc_columnbased']) = grits_loc(true_bbox_grid,
+    (metrics['grits_loc'],
+     metrics['grits_precision_loc'],
+     metrics['grits_recall_loc'],
+     metrics['grits_loc_upper_bound']) = grits_loc(true_bbox_grid,
                                                    pred_bbox_grid)
 
     # Compute GriTS_Con (text content)
-    (metrics['grits_con'], metrics['grits_precision_con'],
-     metrics['grits_recall_con'], metrics['grits_con_rowbased'],
-     metrics['grits_con_columnbased']) = grits_con(true_text_grid,
+    (metrics['grits_con'],
+     metrics['grits_precision_con'],
+     metrics['grits_recall_con'],
+     metrics['grits_con_upper_bound']) = grits_con(true_text_grid,
                                                    pred_text_grid)
 
     # Compute content accuracy
