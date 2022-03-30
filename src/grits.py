@@ -480,33 +480,22 @@ def factored_2dlcs(true_cell_grid, pred_cell_grid, reward_function):
     true_row_nums, pred_row_nums, row_pos_match_score = align_2d_outer(true_cell_grid.shape[:2],
                                                                 pred_cell_grid.shape[:2],
                                                                 pre_computed_rewards)
-    row_fscore, _, _ = compute_fscore(row_pos_match_score, num_pos, num_true)
 
     true_column_nums, pred_column_nums, col_pos_match_score = align_2d_outer(true_cell_grid.shape[:2][::-1],
                                                                          pred_cell_grid.shape[:2][::-1],
                                                                          transpose_rewards)
-    col_fscore, _, _ = compute_fscore(col_pos_match_score, num_pos, num_true)
 
-    score = 0
+    pos_match_score_upper_bound =  min(row_pos_match_score, col_pos_match_score)
+    upper_bound_score, _, _ = compute_fscore(pos_match_score_upper_bound, num_pos, num_true)
+
+    positive_match_score = 0
     for true_row_num, pred_row_num in zip(true_row_nums, pred_row_nums):
         for true_column_num, pred_column_num in zip(true_column_nums, pred_column_nums):
-            score += pre_computed_rewards[(true_row_num, true_column_num, pred_row_num, pred_column_num)]
+            positive_match_score += pre_computed_rewards[(true_row_num, true_column_num, pred_row_num, pred_column_num)]
 
-    if true_cell_grid.shape[0] > 0 and true_cell_grid.shape[1] > 0:
-        recall = score / (true_cell_grid.shape[0]*true_cell_grid.shape[1])
-    else:
-        recall = 1
-    if pred_cell_grid.shape[0] > 0 and pred_cell_grid.shape[1] > 0:
-        precision = score / (pred_cell_grid.shape[0]*pred_cell_grid.shape[1])
-    else:
-        precision = 1
-
-    if precision > 0 and recall > 0:
-        fscore = 2 * precision * recall / (precision + recall)
-    else:
-        fscore = 0
-
-    upper_bound_score = min(row_fscore, col_fscore)
+    fscore, precision, recall = compute_fscore(positive_match_score,
+                                               num_true,
+                                               num_pos)
     
     return fscore, precision, recall, upper_bound_score
 
