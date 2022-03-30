@@ -454,22 +454,15 @@ def align_cells_outer(true_cells, pred_cells, reward_lookup):
 
 
 def factored_2dlcs(true_cell_grid, pred_cell_grid, reward_function):
-    true_num_rows = true_cell_grid.shape[0]
-    true_num_cols = true_cell_grid.shape[1]
-    pred_num_rows = pred_cell_grid.shape[0]
-    pred_num_cols = pred_cell_grid.shape[1]
-    has_third_dim = len(true_cell_grid.shape) > 2
-
     pre_computed_rewards = {}
     transpose_rewards = {}
-    for trow, tcol, prow, pcol in itertools.product(range(true_num_rows),
-                                                    range(true_num_cols),
-                                                    range(pred_num_rows),
-                                                    range(pred_num_cols)):
-        if has_third_dim:
-            reward = reward_function(true_cell_grid[trow, tcol, :], pred_cell_grid[prow, pcol, :])
-        else:
-            reward = reward_function(true_cell_grid[trow, tcol], pred_cell_grid[prow, pcol])
+    for trow, tcol, prow, pcol in itertools.product(range(true_cell_grid.shape[0]),
+                                                    range(true_cell_grid.shape[1]),
+                                                    range(pred_cell_grid.shape[0]),
+                                                    range(pred_cell_grid.shape[1])):
+
+        reward = reward_function(true_cell_grid[trow, tcol], pred_cell_grid[prow, pcol])
+
         pre_computed_rewards[(trow, tcol, prow, pcol)] = reward
         transpose_rewards[(tcol, trow, pcol, prow)] = reward
 
