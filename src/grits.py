@@ -378,6 +378,14 @@ def cells_to_relspan_grid(cells):
 
 
 def compute_fscore(num_true_positives, num_true, num_positives):
+    """
+    Compute the f-score or f-measure for a collection of predictions.
+
+    Conventions:
+    - precision is 1 when there are no predicted instances
+    - recall is 1 when there are no true instances
+    - fscore is 0 when recall or precision is 0
+    """
     if num_positives > 0:
         precision = num_true_positives / num_positives
     else:
@@ -461,7 +469,19 @@ def align_2d_outer(true_shape, pred_shape, reward_lookup):
     return aligned_true_indices, aligned_pred_indices, score
 
 
-def factored_2dlcs(true_cell_grid, pred_cell_grid, reward_function):
+def factored_2dmss(true_cell_grid, pred_cell_grid, reward_function):
+    """
+    Factored 2D-MSS: Factored two-dimensional most-similar substructures
+
+    This is a polynomial-time heuristic to computing the 2D-MSS of two matrices,
+    which is NP hard.
+
+    A substructure of a matrix is a subset of its rows and its columns.
+
+    The most similar substructures of two matrices, A and B, are the substructures
+    A' and B', where the sum of the similarity over all corresponding entries
+    A'(i, j) and B'(i, j) is greatest.
+    """
     pre_computed_rewards = {}
     transpose_rewards = {}
     for trow, tcol, prow, pcol in itertools.product(range(true_cell_grid.shape[0]),
@@ -531,19 +551,19 @@ def output_to_dilatedbbox_grid(bboxes, labels, scores):
 
 
 def grits_top(true_relative_span_grid, pred_relative_span_grid):
-    return factored_2dlcs(true_relative_span_grid,
+    return factored_2dmss(true_relative_span_grid,
                           pred_relative_span_grid,
                           reward_function=eval_utils.iou)
 
 
 def grits_loc(true_bbox_grid, pred_bbox_grid):
-    return factored_2dlcs(true_bbox_grid,
+    return factored_2dmss(true_bbox_grid,
                           pred_bbox_grid,
                           reward_function=eval_utils.iou)
 
 
 def grits_con(true_text_grid, pred_text_grid):
-    return factored_2dlcs(true_text_grid,
+    return factored_2dmss(true_text_grid,
                           pred_text_grid,
                           reward_function=lcs_similarity)
 
