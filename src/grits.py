@@ -120,7 +120,7 @@ def align_1d(sequence1, sequence2, reward_lookup, return_alignment=False):
             else: # skip_seq2_score == max_score
                 pointers[seq1_idx, seq2_idx] = 1
     
-    score = scores[sequence1_length, sequence2_length]
+    score = scores[-1, -1]
     
     if not return_alignment:
         return score
@@ -454,14 +454,11 @@ def align_2d_outer(true_shape, pred_shape, reward_lookup):
             else:
                 pointers[row_idx, col_idx] = 1
     
-    positive_match_score = scores[-1, -1]
-    fscore, precision, recall = compute_fscore(positive_match_score,
-                                               true_shape[0] * true_shape[1],
-                                               pred_shape[0] * pred_shape[1])
+    score = scores[-1, -1]
             
     aligned_true_indices, aligned_pred_indices = traceback(pointers)
     
-    return aligned_true_indices, aligned_pred_indices, fscore
+    return aligned_true_indices, aligned_pred_indices, score
 
 
 def factored_2dlcs(true_cell_grid, pred_cell_grid, reward_function):
@@ -477,13 +474,18 @@ def factored_2dlcs(true_cell_grid, pred_cell_grid, reward_function):
         pre_computed_rewards[(trow, tcol, prow, pcol)] = reward
         transpose_rewards[(tcol, trow, pcol, prow)] = reward
 
-    true_row_nums, pred_row_nums, row_score = align_2d_outer(true_cell_grid.shape[:2],
+    num_pos = pred_cell_grid.shape[0] * pred_cell_grid.shape[1]
+    num_true = true_cell_grid.shape[0] * true_cell_grid.shape[1]
+
+    true_row_nums, pred_row_nums, row_pos_match_score = align_2d_outer(true_cell_grid.shape[:2],
                                                                 pred_cell_grid.shape[:2],
                                                                 pre_computed_rewards)
+    row_fscore, _, _ = compute_fscore(row_pos_match_score, num_pos, num_true)
 
-    true_column_nums, pred_column_nums, column_score = align_2d_outer(true_cell_grid.shape[:2][::-1],
+    true_column_nums, pred_column_nums, col_pos_match_score = align_2d_outer(true_cell_grid.shape[:2][::-1],
                                                                          pred_cell_grid.shape[:2][::-1],
                                                                          transpose_rewards)
+    col_fscore, _, _ = compute_fscore(col_pos_match_score, num_pos, num_true)
 
     score = 0
     for true_row_num, pred_row_num in zip(true_row_nums, pred_row_nums):
@@ -504,7 +506,7 @@ def factored_2dlcs(true_cell_grid, pred_cell_grid, reward_function):
     else:
         fscore = 0
 
-    upper_bound_score = min(row_score, column_score)
+    upper_bound_score = min(row_fscore, col_fscore)
     
     return fscore, precision, recall, upper_bound_score
 
