@@ -109,7 +109,7 @@ def align_1d(sequence1, sequence2, reward_lookup, return_alignment=False):
                 pointers[row_idx, col_idx] = 1
     
     score = scores[sequence1_length, sequence2_length]
-    score = 2 * score / (sequence1_length + sequence2_length)
+    #score = 2 * score / (sequence1_length + sequence2_length)
     
     if not return_alignment:
         return score
@@ -477,8 +477,7 @@ def factored_2dlcs(true_cell_grid, pred_cell_grid, reward_function):
     score = 0
     for true_row_num, pred_row_num in zip(true_row_nums, pred_row_nums):
         for true_column_num, pred_column_num in zip(true_column_nums, pred_column_nums):
-            score += reward_function(true_cell_grid[true_row_num][true_column_num],
-                                     pred_cell_grid[pred_row_num][pred_column_num])
+            score += pre_computed_rewards[(true_row_num, true_column_num, pred_row_num, pred_column_num)]
 
     if true_cell_grid.shape[0] > 0 and true_cell_grid.shape[1] > 0:
         recall = score / (true_cell_grid.shape[0]*true_cell_grid.shape[1])
