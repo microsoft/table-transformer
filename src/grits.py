@@ -75,38 +75,43 @@ def get_supercell_rows_and_columns(supercells, rows, columns):
 
 def align_1d(sequence1, sequence2, reward_lookup, return_alignment=False):
     '''
-    Dynamic programming sequence alignment between two sequences
+    Dynamic programming alignment between two sequences,
+    with memoized rewards.
+
+    Sequences are represented as indices into the rewards lookup table.
+
     Traceback convention: -1 = up, 1 = left, 0 = diag up-left
     '''
     sequence1_length = len(sequence1)
     sequence2_length = len(sequence2)
     
+    # Initialize DP tables
     scores = np.zeros((sequence1_length + 1, sequence2_length + 1))
     pointers = np.zeros((sequence1_length + 1, sequence2_length + 1))
     
-    # Initialize first column
-    for row_idx in range(1, sequence1_length + 1):
-        pointers[row_idx, 0] = -1
+    # Initialize pointers in DP table
+    for seq1_idx in range(1, sequence1_length + 1):
+        pointers[seq1_idx, 0] = -1
         
-    # Initialize first row
-    for col_idx in range(1, sequence2_length + 1):
-        pointers[0, col_idx] = 1
+    # Initialize pointers in DP table
+    for seq2_idx in range(1, sequence2_length + 1):
+        pointers[0, seq2_idx] = 1
         
-    for row_idx in range(1, sequence1_length + 1):
-        for col_idx in range(1, sequence2_length + 1):
-            reward = reward_lookup[sequence1[row_idx-1] + sequence2[col_idx-1]]
-            diag_score = scores[row_idx - 1, col_idx - 1] + reward
-            same_row_score = scores[row_idx, col_idx - 1]
-            same_col_score = scores[row_idx - 1, col_idx]
+    for seq1_idx in range(1, sequence1_length+1):
+        for seq2_idx in range(1, sequence2_length+1):
+            reward = reward_lookup[sequence1[seq1_idx-1] + sequence2[seq2_idx-1]]
+            diag_score = scores[seq1_idx-1, seq2_idx-1] + reward
+            skip_seq2_score = scores[seq1_idx, seq2_idx-1]
+            skip_seq1_score = scores[seq1_idx-1, seq2_idx]
                
-            max_score = max(diag_score, same_col_score, same_row_score)
-            scores[row_idx, col_idx] = max_score
+            max_score = max(diag_score, skip_seq1_score, skip_seq2_score)
+            scores[seq1_idx, seq2_idx] = max_score
             if diag_score == max_score:
-                pointers[row_idx, col_idx] = 0
-            elif same_col_score == max_score:
-                pointers[row_idx, col_idx] = -1
-            else:
-                pointers[row_idx, col_idx] = 1
+                pointers[seq1_idx, seq2_idx] = 0
+            elif skip_seq1_score == max_score:
+                pointers[seq1_idx, seq2_idx] = -1
+            else: # skip_seq2_score == max_score
+                pointers[seq1_idx, seq2_idx] = 1
     
     score = scores[sequence1_length, sequence2_length]
     
@@ -114,20 +119,20 @@ def align_1d(sequence1, sequence2, reward_lookup, return_alignment=False):
         return score
     
     # Backtrace
-    cur_row = sequence1_length
-    cur_col = sequence2_length
+    seq1_idx = sequence1_length
+    seq2_idx = sequence2_length
     aligned_sequence1_indices = []
     aligned_sequence2_indices = []
-    while not (cur_row == 0 and cur_col == 0):
-        if pointers[cur_row, cur_col] == -1:
-            cur_row -= 1
-        elif pointers[cur_row, cur_col] == 1:
-            cur_col -= 1
+    while not (seq1_idx == 0 and seq2_idx == 0):
+        if pointers[seq1_idx, seq2_idx] == -1:
+            seq1_idx -= 1
+        elif pointers[seq1_idx, seq2_idx] == 1:
+            seq2_idx -= 1
         else:
-            cur_row -= 1
-            cur_col -= 1
-            aligned_sequence1_indices.append(cur_col)
-            aligned_sequence2_indices.append(cur_row)
+            seq1_idx -= 1
+            seq2_idx -= 1
+            aligned_sequence1_indices.append(seq1_idx)
+            aligned_sequence2_indices.append(seq2_idx)
             
     aligned_sequence1_indices = aligned_sequence1_indices[::-1]
     aligned_sequence2_indices = aligned_sequence2_indices[::-1]
