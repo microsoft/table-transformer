@@ -302,42 +302,45 @@ def cells_to_adjacency_pair_list_with_blanks(cells, key='cell_text'):
     return adjacency_list, adjacency_bboxes
 
 
-def adjacency_metrics(true_adjacencies, pred_adjacencies):
+def dar_con(true_adjacencies, pred_adjacencies):
+    """
+    Directed adjacency relations (DAR) metric, which uses exact match
+    between adjacent cell text content.
+    """
+
     true_c = Counter()
     true_c.update([elem for elem in true_adjacencies])
 
     pred_c = Counter()
     pred_c.update([elem for elem in pred_adjacencies])
 
-    if len(true_adjacencies) > 0:
-        recall = (sum(true_c.values()) - sum((true_c - pred_c).values())) / sum(true_c.values())
-    else:
-        recall = 1
-    if len(pred_adjacencies) > 0:
-        precision = (sum(pred_c.values()) - sum((pred_c - true_c).values())) / sum(pred_c.values())
-    else:
-        precision = 1
+    num_true_positives = (sum(true_c.values()) - sum((true_c - pred_c).values()))
 
-    if recall + precision == 0:
-        f_score = 0
-    else:
-        f_score = 2 * recall * precision / (recall + precision)
+    fscore, precision, recall = compute_fscore(num_true_positives,
+                                               len(true_adjacencies),
+                                               len(pred_adjacencies))
 
-    return recall, precision, f_score
+    return recall, precision, fscore
 
 
-def adjacency_metric(true_cells, pred_cells):
+def dar_con_original(true_cells, pred_cells):
+    """
+    Original DAR metric, where blank cells are disregarded.
+    """
     true_adjacencies, _ = cells_to_adjacency_pair_list(true_cells)
     pred_adjacencies, _ = cells_to_adjacency_pair_list(pred_cells)
 
-    return adjacency_metrics(true_adjacencies, pred_adjacencies)
+    return dar_con(true_adjacencies, pred_adjacencies)
 
 
-def adjacency_with_blanks_metric(true_cells, pred_cells):
+def dar_con_new(true_cells, pred_cells):
+    """
+    New version of DAR metric where blank cells count.
+    """
     true_adjacencies, _ = cells_to_adjacency_pair_list_with_blanks(true_cells)
     pred_adjacencies, _ = cells_to_adjacency_pair_list_with_blanks(pred_cells)
 
-    return adjacency_metrics(true_adjacencies, pred_adjacencies)
+    return dar_con(true_adjacencies, pred_adjacencies)
 
 
 def cells_to_grid(cells, key='bbox'):
@@ -644,11 +647,11 @@ def compute_metrics(true_bboxes, true_labels, true_scores, true_cells,
 
     # Compute original DAR (directed adjacency relations) metric
     (metrics['dar_original_recall_con'], metrics['dar_original_precision_con'],
-     metrics['dar_original_con']) = adjacency_metric(true_cells, pred_cells)
+     metrics['dar_original_con']) = dar_con_original(true_cells, pred_cells)
 
     # Compute updated DAR (directed adjacency relations) metric
     (metrics['dar_recall_con'], metrics['dar_precision_con'],
-     metrics['dar_con']) = adjacency_with_blanks_metric(true_cells, pred_cells)
+     metrics['dar_con']) = dar_con_new(true_cells, pred_cells)
 
     return metrics
 
