@@ -386,27 +386,32 @@ def cells_to_relspan_grid(cells):
     return cell_grid
 
 
-def align_cells_outer(true_cells, pred_cells, reward_lookup):
+def align_2d_outer(true_shape, pred_shape, reward_lookup):
     '''
-    Dynamic programming sequence alignment between two sequences
+    Dynamic programming matrix alignment posed as 2D
+    sequence-of-sequences alignment:
+    Align two outer sequences whose entries are also sequences,
+    where the match reward between the inner sequence entries
+    is their 1D sequence alignment score.
+
     Traceback convention: -1 = up, 1 = left, 0 = diag up-left
     '''
     
-    scores = np.zeros((len(true_cells) + 1, len(pred_cells) + 1))
-    pointers = np.zeros((len(true_cells) + 1, len(pred_cells) + 1))
+    scores = np.zeros((true_shape[0] + 1, pred_shape[0] + 1))
+    pointers = np.zeros((true_shape[0] + 1, pred_shape[0] + 1))
     
     # Initialize first column
-    for row_idx in range(1, len(true_cells) + 1):
+    for row_idx in range(1, true_shape[0] + 1):
         pointers[row_idx, 0] = -1
         
     # Initialize first row
-    for col_idx in range(1, len(pred_cells) + 1):
+    for col_idx in range(1, pred_shape[0] + 1):
         pointers[0, col_idx] = 1
         
-    for row_idx in range(1, len(true_cells) + 1):
-        for col_idx in range(1, len(pred_cells) + 1):
-            reward = align_1d([(row_idx-1, tcol) for tcol in range(len(true_cells[0]))],
-                              [(col_idx-1, prow) for prow in range(len(pred_cells[0]))],
+    for row_idx in range(1, true_shape[0] + 1):
+        for col_idx in range(1, pred_shape[0] + 1):
+            reward = align_1d([(row_idx-1, tcol) for tcol in range(true_shape[1])],
+                              [(col_idx-1, prow) for prow in range(pred_shape[1])],
                               reward_lookup)
             diag_score = scores[row_idx - 1, col_idx - 1] + reward
             same_row_score = scores[row_idx, col_idx - 1]
@@ -421,13 +426,13 @@ def align_cells_outer(true_cells, pred_cells, reward_lookup):
             else:
                 pointers[row_idx, col_idx] = 1
     
-    score = scores[len(true_cells), len(pred_cells)]
-    if len(pred_cells) > 0 and len(pred_cells[0]) > 0:
-        precision = score / (len(pred_cells) * len(pred_cells[0]))
+    score = scores[-1, -1]
+    if pred_shape[0] > 0 and pred_shape[1] > 0:
+        precision = score / (pred_shape[0] * pred_shape[1])
     else:
         precision = 1
-    if len(true_cells) > 0 and len(true_cells[0]) > 0:
-        recall = score / (len(true_cells) * len(true_cells[0]))
+    if true_shape[0] > 0 and true_shape[1] > 0:
+        recall = score / (true_shape[0] * true_shape[1])
     else:
         recall = 1
         
@@ -436,8 +441,8 @@ def align_cells_outer(true_cells, pred_cells, reward_lookup):
     else:
         score = 0
     
-    cur_row = len(true_cells)
-    cur_col = len(pred_cells)
+    cur_row = true_shape[0]
+    cur_col = pred_shape[0]
     aligned_true_indices = []
     aligned_pred_indices = []
     while not (cur_row == 0 and cur_col == 0):
@@ -470,12 +475,12 @@ def factored_2dlcs(true_cell_grid, pred_cell_grid, reward_function):
         pre_computed_rewards[(trow, tcol, prow, pcol)] = reward
         transpose_rewards[(tcol, trow, pcol, prow)] = reward
 
-    true_row_nums, pred_row_nums, row_score = align_cells_outer(true_cell_grid,
-                                                                pred_cell_grid,
+    true_row_nums, pred_row_nums, row_score = align_2d_outer(true_cell_grid.shape[:2],
+                                                                pred_cell_grid.shape[:2],
                                                                 pre_computed_rewards)
 
-    true_column_nums, pred_column_nums, column_score = align_cells_outer(transpose(true_cell_grid),
-                                                                         transpose(pred_cell_grid),
+    true_column_nums, pred_column_nums, column_score = align_2d_outer(true_cell_grid.shape[:2][::-1],
+                                                                         pred_cell_grid.shape[:2][::-1],
                                                                          transpose_rewards)
 
     score = 0
