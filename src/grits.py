@@ -73,18 +73,7 @@ def get_supercell_rows_and_columns(supercells, rows, columns):
     return matches_by_supercell
 
 
-def align_1d(sequence1, sequence2, reward_lookup, return_alignment=False):
-    '''
-    Dynamic programming alignment between two sequences,
-    with memoized rewards.
-
-    Sequences are represented as indices into the rewards lookup table.
-
-    Traceback convention: -1 = up, 1 = left, 0 = diag up-left
-    '''
-    sequence1_length = len(sequence1)
-    sequence2_length = len(sequence2)
-    
+def initialize_DP(sequence1_length, sequence2_length):
     # Initialize DP tables
     scores = np.zeros((sequence1_length + 1, sequence2_length + 1))
     pointers = np.zeros((sequence1_length + 1, sequence2_length + 1))
@@ -96,6 +85,24 @@ def align_1d(sequence1, sequence2, reward_lookup, return_alignment=False):
     # Initialize pointers in DP table
     for seq2_idx in range(1, sequence2_length + 1):
         pointers[0, seq2_idx] = 1
+
+    return scores, pointers
+
+
+def align_1d(sequence1, sequence2, reward_lookup, return_alignment=False):
+    '''
+    Dynamic programming alignment between two sequences,
+    with memoized rewards.
+
+    Sequences are represented as indices into the rewards lookup table.
+
+    Traceback convention: -1 = up, 1 = left, 0 = diag up-left
+    '''
+    sequence1_length = len(sequence1)
+    sequence2_length = len(sequence2)
+
+    scores, pointers = initialize_DP(sequence1_length,
+                                     sequence2_length)
         
     for seq1_idx in range(1, sequence1_length+1):
         for seq2_idx in range(1, sequence2_length+1):
@@ -118,26 +125,10 @@ def align_1d(sequence1, sequence2, reward_lookup, return_alignment=False):
     if not return_alignment:
         return score
     
-    # Backtrace
-    seq1_idx = sequence1_length
-    seq2_idx = sequence2_length
-    aligned_sequence1_indices = []
-    aligned_sequence2_indices = []
-    while not (seq1_idx == 0 and seq2_idx == 0):
-        if pointers[seq1_idx, seq2_idx] == -1:
-            seq1_idx -= 1
-        elif pointers[seq1_idx, seq2_idx] == 1:
-            seq2_idx -= 1
-        else:
-            seq1_idx -= 1
-            seq2_idx -= 1
-            aligned_sequence1_indices.append(seq1_idx)
-            aligned_sequence2_indices.append(seq2_idx)
-            
-    aligned_sequence1_indices = aligned_sequence1_indices[::-1]
-    aligned_sequence2_indices = aligned_sequence2_indices[::-1]
+    # Traceback
+    sequence1_indices, sequence2_indices = traceback(pointers)
     
-    return aligned_sequence1_indices, aligned_sequence2_indices, score
+    return sequence1_indices, sequence2_indices, score
 
 
 def objects_to_cells(bboxes, labels, scores, page_tokens, structure_class_names, structure_class_thresholds, structure_class_map):
@@ -426,8 +417,8 @@ def traceback(pointers):
             aligned_sequence1_indices.append(seq1_idx)
             aligned_sequence2_indices.append(seq2_idx)
             
-    aligned_sequence1_indices = aligned_sequence1_indices.reverse()
-    aligned_sequence2_indices = aligned_sequence2_indices.reverse()
+    aligned_sequence1_indices = aligned_sequence1_indices[::-1]
+    aligned_sequence2_indices = aligned_sequence2_indices[::-1]
 
     return aligned_sequence1_indices, aligned_sequence2_indices
 
@@ -443,16 +434,7 @@ def align_2d_outer(true_shape, pred_shape, reward_lookup):
     Traceback convention: -1 = up, 1 = left, 0 = diag up-left
     '''
     
-    scores = np.zeros((true_shape[0] + 1, pred_shape[0] + 1))
-    pointers = np.zeros((true_shape[0] + 1, pred_shape[0] + 1))
-    
-    # Initialize first column
-    for row_idx in range(1, true_shape[0] + 1):
-        pointers[row_idx, 0] = -1
-        
-    # Initialize first row
-    for col_idx in range(1, pred_shape[0] + 1):
-        pointers[0, col_idx] = 1
+    scores, pointers = initialize_DP(true_shape[0], pred_shape[0])
         
     for row_idx in range(1, true_shape[0] + 1):
         for col_idx in range(1, pred_shape[0] + 1):
