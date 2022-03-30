@@ -8,6 +8,7 @@ import json
 import statistics as stat
 from datetime import datetime
 from difflib import SequenceMatcher
+import itertools
 
 import torch
 from torchvision import transforms
@@ -72,7 +73,7 @@ def get_supercell_rows_and_columns(supercells, rows, columns):
     return matches_by_supercell
 
 
-def align_1d(sequence1, sequence2, reward_function, return_alignment=False):
+def align_1d(sequence1, sequence2, reward_lookup, return_alignment=False):
     '''
     Dynamic programming sequence alignment between two sequences
     Traceback convention: -1 = up, 1 = left, 0 = diag up-left
@@ -93,7 +94,7 @@ def align_1d(sequence1, sequence2, reward_function, return_alignment=False):
         
     for row_idx in range(1, sequence1_length + 1):
         for col_idx in range(1, sequence2_length + 1):
-            reward = reward_function(sequence1[row_idx-1], sequence2[col_idx-1])
+            reward = reward_lookup[sequence1[row_idx-1] + sequence2[col_idx-1]]
             diag_score = scores[row_idx - 1, col_idx - 1] + reward
             same_row_score = scores[row_idx, col_idx - 1]
             same_col_score = scores[row_idx - 1, col_idx]
@@ -381,7 +382,7 @@ def cells_to_relspan_grid(cells):
     return cell_grid
 
 
-def align_cells_outer(true_cells, pred_cells, reward_function):
+def align_cells_outer(true_cells, pred_cells, reward_lookup):
     '''
     Dynamic programming sequence alignment between two sequences
     Traceback convention: -1 = up, 1 = left, 0 = diag up-left
@@ -400,7 +401,9 @@ def align_cells_outer(true_cells, pred_cells, reward_function):
         
     for row_idx in range(1, len(true_cells) + 1):
         for col_idx in range(1, len(pred_cells) + 1):
-            reward = align_1d(true_cells[row_idx-1], pred_cells[col_idx-1], reward_function)
+            reward = align_1d([(row_idx-1, tcol) for tcol in range(len(true_cells[0]))],
+                              [(col_idx-1, prow) for prow in range(len(pred_cells[0]))],
+                              reward_lookup)
             diag_score = scores[row_idx - 1, col_idx - 1] + reward
             same_row_score = scores[row_idx, col_idx - 1]
             same_col_score = scores[row_idx - 1, col_idx]
@@ -451,12 +454,32 @@ def align_cells_outer(true_cells, pred_cells, reward_function):
 
 
 def factored_2dlcs(true_cell_grid, pred_cell_grid, reward_function):
+    true_num_rows = true_cell_grid.shape[0]
+    true_num_cols = true_cell_grid.shape[1]
+    pred_num_rows = pred_cell_grid.shape[0]
+    pred_num_cols = pred_cell_grid.shape[1]
+    has_third_dim = len(true_cell_grid.shape) > 2
+
+    pre_computed_rewards = {}
+    transpose_rewards = {}
+    for trow, tcol, prow, pcol in itertools.product(range(true_num_rows),
+                                                    range(true_num_cols),
+                                                    range(pred_num_rows),
+                                                    range(pred_num_cols)):
+        if has_third_dim:
+            reward = reward_function(true_cell_grid[trow, tcol, :], pred_cell_grid[prow, pcol, :])
+        else:
+            reward = reward_function(true_cell_grid[trow, tcol], pred_cell_grid[prow, pcol])
+        pre_computed_rewards[(trow, tcol, prow, pcol)] = reward
+        transpose_rewards[(tcol, trow, pcol, prow)] = reward
+
     true_row_nums, pred_row_nums, row_score = align_cells_outer(true_cell_grid,
                                                                 pred_cell_grid,
-                                                                reward_function)
+                                                                pre_computed_rewards)
+
     true_column_nums, pred_column_nums, column_score = align_cells_outer(transpose(true_cell_grid),
                                                                          transpose(pred_cell_grid),
-                                                                         reward_function)
+                                                                         transpose_rewards)
 
     score = 0
     for true_row_num, pred_row_num in zip(true_row_nums, pred_row_nums):
@@ -569,11 +592,15 @@ def compute_metrics(true_bboxes, true_labels, true_scores, true_cells,
      metrics['grits_recall_con'], metrics['grits_con_rowbased'],
      metrics['grits_con_columnbased']) = grits_con(true_text_grid,
                                                    pred_text_grid)
+
+    # Compute content accuracy
     metrics['acc_con'] = int(metrics['grits_con'] == 1)
 
+    # Compute original DAR (directed adjacency relations) metric
     (metrics['dar_original_recall_con'], metrics['dar_original_precision_con'],
      metrics['dar_original_con']) = adjacency_metric(true_cells, pred_cells)
 
+    # Compute updated DAR (directed adjacency relations) metric
     (metrics['dar_recall_con'], metrics['dar_precision_con'],
      metrics['dar_con']) = adjacency_with_blanks_metric(true_cells, pred_cells)
 
