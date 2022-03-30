@@ -109,7 +109,6 @@ def align_1d(sequence1, sequence2, reward_lookup, return_alignment=False):
                 pointers[row_idx, col_idx] = 1
     
     score = scores[sequence1_length, sequence2_length]
-    #score = 2 * score / (sequence1_length + sequence2_length)
     
     if not return_alignment:
         return score
