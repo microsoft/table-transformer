@@ -551,18 +551,36 @@ def output_to_dilatedbbox_grid(bboxes, labels, scores):
 
 
 def grits_top(true_relative_span_grid, pred_relative_span_grid):
+    """
+    Compute GriTS_Top given two matrices of cell relative spans.
+
+    For the cell at grid location (i,j), let a(i,j) be its rowspan,
+    let β(i,j) be its colspan, let p(i,j) be the minimum row it occupies,
+    and let θ(i,j) be the minimum column it occupies. Its relative span is
+    bounding box [θ(i,j)-j, p(i,j)-i, θ(i,j)-j+β(i,j), p(i,j)-i+a(i,j)].
+
+    It gives the size and location of the cell each grid cell belongs to
+    relative to the current grid cell location, in grid coordinate units.
+    Note that for a non-spanning cell this will always be [0, 0, 1, 1].
+    """
     return factored_2dmss(true_relative_span_grid,
                           pred_relative_span_grid,
                           reward_function=eval_utils.iou)
 
 
 def grits_loc(true_bbox_grid, pred_bbox_grid):
+    """
+    Compute GriTS_Loc given two matrices of cell bounding boxes.
+    """
     return factored_2dmss(true_bbox_grid,
                           pred_bbox_grid,
                           reward_function=eval_utils.iou)
 
 
 def grits_con(true_text_grid, pred_text_grid):
+    """
+    Compute GriTS_Con given two matrices of cell text strings.
+    """
     return factored_2dmss(true_text_grid,
                           pred_text_grid,
                           reward_function=lcs_similarity)
@@ -570,6 +588,15 @@ def grits_con(true_text_grid, pred_text_grid):
 
 def compute_metrics(true_bboxes, true_labels, true_scores, true_cells,
                     pred_bboxes, pred_labels, pred_scores, pred_cells):
+    """
+    Compute the collection of table structure recognition metrics given
+    the ground truth and predictions as input.
+
+    - bboxes, labels, and scores are required to compute GriTS_RawLoc, which
+      is GriTS_Loc but on unprocessed bounding boxes, compared with the dilated
+      ground truth bounding boxes the model is trained on.
+    - Otherwise, only true_cells and pred_cells are needed.
+    """
 
     # Compute grids/matrices for comparison
     true_cell_dilatedbbox_grid = np.array(output_to_dilatedbbox_grid(true_bboxes, true_labels, true_scores))
@@ -582,7 +609,6 @@ def compute_metrics(true_bboxes, true_labels, true_scores, true_cells,
     pred_bbox_grid = np.array(cells_to_grid(pred_cells, key='bbox'))
     pred_text_grid = np.array(cells_to_grid(pred_cells, key='cell_text'), dtype=object)
 
-    #---Compute each of the metrics
     metrics = {}
 
     # Compute GriTS_RawLoc (location using unprocessed bounding boxes)
