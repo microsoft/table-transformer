@@ -386,6 +386,52 @@ def cells_to_relspan_grid(cells):
     return cell_grid
 
 
+def compute_fscore(num_true_positives, num_true, num_positives):
+    if num_positives > 0:
+        precision = num_true_positives / num_positives
+    else:
+        precision = 1
+    if num_true > 0:
+        recall = num_true_positives / num_true
+    else:
+        recall = 1
+        
+    if precision + recall > 0:
+        fscore = 2 * precision * recall / (precision + recall)
+    else:
+        fscore = 0
+
+    return fscore, precision, recall  
+
+
+def traceback(pointers):
+    """
+    Dynamic programming traceback to determine the aligned indices
+    between the two sequences.
+
+    Traceback convention: -1 = up, 1 = left, 0 = diag up-left
+    """
+    seq1_idx = pointers.shape[0] - 1
+    seq2_idx = pointers.shape[1] - 1
+    aligned_sequence1_indices = []
+    aligned_sequence2_indices = []
+    while not (seq1_idx == 0 and seq2_idx == 0):
+        if pointers[seq1_idx, seq2_idx] == -1:
+            seq1_idx -= 1
+        elif pointers[seq1_idx, seq2_idx] == 1:
+            seq2_idx -= 1
+        else:
+            seq1_idx -= 1
+            seq2_idx -= 1
+            aligned_sequence1_indices.append(seq1_idx)
+            aligned_sequence2_indices.append(seq2_idx)
+            
+    aligned_sequence1_indices = aligned_sequence1_indices.reverse()
+    aligned_sequence2_indices = aligned_sequence2_indices.reverse()
+
+    return aligned_sequence1_indices, aligned_sequence2_indices
+
+
 def align_2d_outer(true_shape, pred_shape, reward_lookup):
     '''
     Dynamic programming matrix alignment posed as 2D
@@ -426,40 +472,14 @@ def align_2d_outer(true_shape, pred_shape, reward_lookup):
             else:
                 pointers[row_idx, col_idx] = 1
     
-    score = scores[-1, -1]
-    if pred_shape[0] > 0 and pred_shape[1] > 0:
-        precision = score / (pred_shape[0] * pred_shape[1])
-    else:
-        precision = 1
-    if true_shape[0] > 0 and true_shape[1] > 0:
-        recall = score / (true_shape[0] * true_shape[1])
-    else:
-        recall = 1
-        
-    if precision + recall > 0:
-        score = 2 * precision * recall / (precision + recall)
-    else:
-        score = 0
-    
-    cur_row = true_shape[0]
-    cur_col = pred_shape[0]
-    aligned_true_indices = []
-    aligned_pred_indices = []
-    while not (cur_row == 0 and cur_col == 0):
-        if pointers[cur_row, cur_col] == -1:
-            cur_row -= 1
-        elif pointers[cur_row, cur_col] == 1:
-            cur_col -= 1
-        else:
-            cur_row -= 1
-            cur_col -= 1
-            aligned_pred_indices.append(cur_col)
-            aligned_true_indices.append(cur_row)
+    positive_match_score = scores[-1, -1]
+    fscore, precision, recall = compute_fscore(positive_match_score,
+                                               true_shape[0] * true_shape[1],
+                                               pred_shape[0] * pred_shape[1])
             
-    aligned_true_indices = aligned_true_indices[::-1]
-    aligned_pred_indices = aligned_pred_indices[::-1]
+    aligned_true_indices, aligned_pred_indices = traceback(pointers)
     
-    return aligned_true_indices, aligned_pred_indices, score
+    return aligned_true_indices, aligned_pred_indices, fscore
 
 
 def factored_2dlcs(true_cell_grid, pred_cell_grid, reward_function):
