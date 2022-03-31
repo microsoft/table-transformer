@@ -21,10 +21,6 @@ sys.path.append("../detr")
 import eval_utils
 
 
-def transpose(matrix):
-    return list(map(list, zip(*matrix)))
-
-
 def get_supercell_rows_and_columns(supercells, rows, columns):
     matches_by_supercell = []
     all_matches = set()
