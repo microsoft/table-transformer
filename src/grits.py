@@ -8,6 +8,7 @@ import json
 import statistics as stat
 from datetime import datetime
 from difflib import SequenceMatcher
+import itertools
 
 import torch
 from torchvision import transforms
@@ -18,10 +19,6 @@ from fitz import Rect
 
 sys.path.append("../detr")
 import eval_utils
-
-
-def transpose(matrix):
-    return list(map(list, zip(*matrix)))
 
 
 def get_supercell_rows_and_columns(supercells, rows, columns):
@@ -72,67 +69,62 @@ def get_supercell_rows_and_columns(supercells, rows, columns):
     return matches_by_supercell
 
 
-def align_1d(sequence1, sequence2, reward_function, return_alignment=False):
+def initialize_DP(sequence1_length, sequence2_length):
+    # Initialize DP tables
+    scores = np.zeros((sequence1_length + 1, sequence2_length + 1))
+    pointers = np.zeros((sequence1_length + 1, sequence2_length + 1))
+    
+    # Initialize pointers in DP table
+    for seq1_idx in range(1, sequence1_length + 1):
+        pointers[seq1_idx, 0] = -1
+        
+    # Initialize pointers in DP table
+    for seq2_idx in range(1, sequence2_length + 1):
+        pointers[0, seq2_idx] = 1
+
+    return scores, pointers
+
+
+def align_1d(sequence1, sequence2, reward_lookup, return_alignment=False):
     '''
-    Dynamic programming sequence alignment between two sequences
+    Dynamic programming alignment between two sequences,
+    with memoized rewards.
+
+    Sequences are represented as indices into the rewards lookup table.
+
     Traceback convention: -1 = up, 1 = left, 0 = diag up-left
     '''
     sequence1_length = len(sequence1)
     sequence2_length = len(sequence2)
-    
-    scores = np.zeros((sequence1_length + 1, sequence2_length + 1))
-    pointers = np.zeros((sequence1_length + 1, sequence2_length + 1))
-    
-    # Initialize first column
-    for row_idx in range(1, sequence1_length + 1):
-        pointers[row_idx, 0] = -1
+
+    scores, pointers = initialize_DP(sequence1_length,
+                                     sequence2_length)
         
-    # Initialize first row
-    for col_idx in range(1, sequence2_length + 1):
-        pointers[0, col_idx] = 1
-        
-    for row_idx in range(1, sequence1_length + 1):
-        for col_idx in range(1, sequence2_length + 1):
-            reward = reward_function(sequence1[row_idx-1], sequence2[col_idx-1])
-            diag_score = scores[row_idx - 1, col_idx - 1] + reward
-            same_row_score = scores[row_idx, col_idx - 1]
-            same_col_score = scores[row_idx - 1, col_idx]
+    for seq1_idx in range(1, sequence1_length+1):
+        for seq2_idx in range(1, sequence2_length+1):
+            reward = reward_lookup[sequence1[seq1_idx-1] + sequence2[seq2_idx-1]]
+            diag_score = scores[seq1_idx-1, seq2_idx-1] + reward
+            skip_seq2_score = scores[seq1_idx, seq2_idx-1]
+            skip_seq1_score = scores[seq1_idx-1, seq2_idx]
                
-            max_score = max(diag_score, same_col_score, same_row_score)
-            scores[row_idx, col_idx] = max_score
+            max_score = max(diag_score, skip_seq1_score, skip_seq2_score)
+            scores[seq1_idx, seq2_idx] = max_score
             if diag_score == max_score:
-                pointers[row_idx, col_idx] = 0
-            elif same_col_score == max_score:
-                pointers[row_idx, col_idx] = -1
-            else:
-                pointers[row_idx, col_idx] = 1
+                pointers[seq1_idx, seq2_idx] = 0
+            elif skip_seq1_score == max_score:
+                pointers[seq1_idx, seq2_idx] = -1
+            else: # skip_seq2_score == max_score
+                pointers[seq1_idx, seq2_idx] = 1
     
-    score = scores[sequence1_length, sequence2_length]
-    score = 2 * score / (sequence1_length + sequence2_length)
+    score = scores[-1, -1]
     
     if not return_alignment:
         return score
     
-    # Backtrace
-    cur_row = sequence1_length
-    cur_col = sequence2_length
-    aligned_sequence1_indices = []
-    aligned_sequence2_indices = []
-    while not (cur_row == 0 and cur_col == 0):
-        if pointers[cur_row, cur_col] == -1:
-            cur_row -= 1
-        elif pointers[cur_row, cur_col] == 1:
-            cur_col -= 1
-        else:
-            cur_row -= 1
-            cur_col -= 1
-            aligned_sequence1_indices.append(cur_col)
-            aligned_sequence2_indices.append(cur_row)
-            
-    aligned_sequence1_indices = aligned_sequence1_indices[::-1]
-    aligned_sequence2_indices = aligned_sequence2_indices[::-1]
+    # Traceback
+    sequence1_indices, sequence2_indices = traceback(pointers)
     
-    return aligned_sequence1_indices, aligned_sequence2_indices, score
+    return sequence1_indices, sequence2_indices, score
 
 
 def objects_to_cells(bboxes, labels, scores, page_tokens, structure_class_names, structure_class_thresholds, structure_class_map):
@@ -306,42 +298,45 @@ def cells_to_adjacency_pair_list_with_blanks(cells, key='cell_text'):
     return adjacency_list, adjacency_bboxes
 
 
-def adjacency_metrics(true_adjacencies, pred_adjacencies):
+def dar_con(true_adjacencies, pred_adjacencies):
+    """
+    Directed adjacency relations (DAR) metric, which uses exact match
+    between adjacent cell text content.
+    """
+
     true_c = Counter()
     true_c.update([elem for elem in true_adjacencies])
 
     pred_c = Counter()
     pred_c.update([elem for elem in pred_adjacencies])
 
-    if len(true_adjacencies) > 0:
-        recall = (sum(true_c.values()) - sum((true_c - pred_c).values())) / sum(true_c.values())
-    else:
-        recall = 1
-    if len(pred_adjacencies) > 0:
-        precision = (sum(pred_c.values()) - sum((pred_c - true_c).values())) / sum(pred_c.values())
-    else:
-        precision = 1
+    num_true_positives = (sum(true_c.values()) - sum((true_c - pred_c).values()))
 
-    if recall + precision == 0:
-        f_score = 0
-    else:
-        f_score = 2 * recall * precision / (recall + precision)
+    fscore, precision, recall = compute_fscore(num_true_positives,
+                                               len(true_adjacencies),
+                                               len(pred_adjacencies))
 
-    return recall, precision, f_score
+    return recall, precision, fscore
 
 
-def adjacency_metric(true_cells, pred_cells):
+def dar_con_original(true_cells, pred_cells):
+    """
+    Original DAR metric, where blank cells are disregarded.
+    """
     true_adjacencies, _ = cells_to_adjacency_pair_list(true_cells)
     pred_adjacencies, _ = cells_to_adjacency_pair_list(pred_cells)
 
-    return adjacency_metrics(true_adjacencies, pred_adjacencies)
+    return dar_con(true_adjacencies, pred_adjacencies)
 
 
-def adjacency_with_blanks_metric(true_cells, pred_cells):
+def dar_con_new(true_cells, pred_cells):
+    """
+    New version of DAR metric where blank cells count.
+    """
     true_adjacencies, _ = cells_to_adjacency_pair_list_with_blanks(true_cells)
     pred_adjacencies, _ = cells_to_adjacency_pair_list_with_blanks(pred_cells)
 
-    return adjacency_metrics(true_adjacencies, pred_adjacencies)
+    return dar_con(true_adjacencies, pred_adjacencies)
 
 
 def cells_to_grid(cells, key='bbox'):
@@ -381,26 +376,78 @@ def cells_to_relspan_grid(cells):
     return cell_grid
 
 
-def align_cells_outer(true_cells, pred_cells, reward_function):
+def compute_fscore(num_true_positives, num_true, num_positives):
+    """
+    Compute the f-score or f-measure for a collection of predictions.
+
+    Conventions:
+    - precision is 1 when there are no predicted instances
+    - recall is 1 when there are no true instances
+    - fscore is 0 when recall or precision is 0
+    """
+    if num_positives > 0:
+        precision = num_true_positives / num_positives
+    else:
+        precision = 1
+    if num_true > 0:
+        recall = num_true_positives / num_true
+    else:
+        recall = 1
+        
+    if precision + recall > 0:
+        fscore = 2 * precision * recall / (precision + recall)
+    else:
+        fscore = 0
+
+    return fscore, precision, recall  
+
+
+def traceback(pointers):
+    """
+    Dynamic programming traceback to determine the aligned indices
+    between the two sequences.
+
+    Traceback convention: -1 = up, 1 = left, 0 = diag up-left
+    """
+    seq1_idx = pointers.shape[0] - 1
+    seq2_idx = pointers.shape[1] - 1
+    aligned_sequence1_indices = []
+    aligned_sequence2_indices = []
+    while not (seq1_idx == 0 and seq2_idx == 0):
+        if pointers[seq1_idx, seq2_idx] == -1:
+            seq1_idx -= 1
+        elif pointers[seq1_idx, seq2_idx] == 1:
+            seq2_idx -= 1
+        else:
+            seq1_idx -= 1
+            seq2_idx -= 1
+            aligned_sequence1_indices.append(seq1_idx)
+            aligned_sequence2_indices.append(seq2_idx)
+            
+    aligned_sequence1_indices = aligned_sequence1_indices[::-1]
+    aligned_sequence2_indices = aligned_sequence2_indices[::-1]
+
+    return aligned_sequence1_indices, aligned_sequence2_indices
+
+
+def align_2d_outer(true_shape, pred_shape, reward_lookup):
     '''
-    Dynamic programming sequence alignment between two sequences
+    Dynamic programming matrix alignment posed as 2D
+    sequence-of-sequences alignment:
+    Align two outer sequences whose entries are also sequences,
+    where the match reward between the inner sequence entries
+    is their 1D sequence alignment score.
+
     Traceback convention: -1 = up, 1 = left, 0 = diag up-left
     '''
     
-    scores = np.zeros((len(true_cells) + 1, len(pred_cells) + 1))
-    pointers = np.zeros((len(true_cells) + 1, len(pred_cells) + 1))
-    
-    # Initialize first column
-    for row_idx in range(1, len(true_cells) + 1):
-        pointers[row_idx, 0] = -1
+    scores, pointers = initialize_DP(true_shape[0], pred_shape[0])
         
-    # Initialize first row
-    for col_idx in range(1, len(pred_cells) + 1):
-        pointers[0, col_idx] = 1
-        
-    for row_idx in range(1, len(true_cells) + 1):
-        for col_idx in range(1, len(pred_cells) + 1):
-            reward = align_1d(true_cells[row_idx-1], pred_cells[col_idx-1], reward_function)
+    for row_idx in range(1, true_shape[0] + 1):
+        for col_idx in range(1, pred_shape[0] + 1):
+            reward = align_1d([(row_idx-1, tcol) for tcol in range(true_shape[1])],
+                              [(col_idx-1, prow) for prow in range(pred_shape[1])],
+                              reward_lookup)
             diag_score = scores[row_idx - 1, col_idx - 1] + reward
             same_row_score = scores[row_idx, col_idx - 1]
             same_col_score = scores[row_idx - 1, col_idx]
@@ -414,71 +461,62 @@ def align_cells_outer(true_cells, pred_cells, reward_function):
             else:
                 pointers[row_idx, col_idx] = 1
     
-    score = scores[len(true_cells), len(pred_cells)]
-    if len(pred_cells) > 0:
-        precision = score / len(pred_cells)
-    else:
-        precision = 1
-    if len(true_cells) > 0:
-        recall = score / len(true_cells)
-    else:
-        recall = 1
-        
-    if precision + recall > 0:
-        score = 2 * precision * recall / (precision + recall)
-    else:
-        score = 0
-    
-    cur_row = len(true_cells)
-    cur_col = len(pred_cells)
-    aligned_true_indices = []
-    aligned_pred_indices = []
-    while not (cur_row == 0 and cur_col == 0):
-        if pointers[cur_row, cur_col] == -1:
-            cur_row -= 1
-        elif pointers[cur_row, cur_col] == 1:
-            cur_col -= 1
-        else:
-            cur_row -= 1
-            cur_col -= 1
-            aligned_pred_indices.append(cur_col)
-            aligned_true_indices.append(cur_row)
+    score = scores[-1, -1]
             
-    aligned_true_indices = aligned_true_indices[::-1]
-    aligned_pred_indices = aligned_pred_indices[::-1]
+    aligned_true_indices, aligned_pred_indices = traceback(pointers)
     
     return aligned_true_indices, aligned_pred_indices, score
 
 
-def factored_2dlcs(true_cell_grid, pred_cell_grid, reward_function):
-    true_row_nums, pred_row_nums, row_score = align_cells_outer(true_cell_grid,
-                                                                pred_cell_grid,
-                                                                reward_function)
-    true_column_nums, pred_column_nums, column_score = align_cells_outer(transpose(true_cell_grid),
-                                                                         transpose(pred_cell_grid),
-                                                                         reward_function)
+def factored_2dmss(true_cell_grid, pred_cell_grid, reward_function):
+    """
+    Factored 2D-MSS: Factored two-dimensional most-similar substructures
 
-    score = 0
+    This is a polynomial-time heuristic to computing the 2D-MSS of two matrices,
+    which is NP hard.
+
+    A substructure of a matrix is a subset of its rows and its columns.
+
+    The most similar substructures of two matrices, A and B, are the substructures
+    A' and B', where the sum of the similarity over all corresponding entries
+    A'(i, j) and B'(i, j) is greatest.
+    """
+    pre_computed_rewards = {}
+    transpose_rewards = {}
+    for trow, tcol, prow, pcol in itertools.product(range(true_cell_grid.shape[0]),
+                                                    range(true_cell_grid.shape[1]),
+                                                    range(pred_cell_grid.shape[0]),
+                                                    range(pred_cell_grid.shape[1])):
+
+        reward = reward_function(true_cell_grid[trow, tcol], pred_cell_grid[prow, pcol])
+
+        pre_computed_rewards[(trow, tcol, prow, pcol)] = reward
+        transpose_rewards[(tcol, trow, pcol, prow)] = reward
+
+    num_pos = pred_cell_grid.shape[0] * pred_cell_grid.shape[1]
+    num_true = true_cell_grid.shape[0] * true_cell_grid.shape[1]
+
+    true_row_nums, pred_row_nums, row_pos_match_score = align_2d_outer(true_cell_grid.shape[:2],
+                                                                pred_cell_grid.shape[:2],
+                                                                pre_computed_rewards)
+
+    true_column_nums, pred_column_nums, col_pos_match_score = align_2d_outer(true_cell_grid.shape[:2][::-1],
+                                                                         pred_cell_grid.shape[:2][::-1],
+                                                                         transpose_rewards)
+
+    pos_match_score_upper_bound =  min(row_pos_match_score, col_pos_match_score)
+    upper_bound_score, _, _ = compute_fscore(pos_match_score_upper_bound, num_pos, num_true)
+
+    positive_match_score = 0
     for true_row_num, pred_row_num in zip(true_row_nums, pred_row_nums):
         for true_column_num, pred_column_num in zip(true_column_nums, pred_column_nums):
-            score += reward_function(true_cell_grid[true_row_num][true_column_num],
-                                     pred_cell_grid[pred_row_num][pred_column_num])
+            positive_match_score += pre_computed_rewards[(true_row_num, true_column_num, pred_row_num, pred_column_num)]
 
-    if true_cell_grid.shape[0] > 0 and true_cell_grid.shape[1] > 0:
-        recall = score / (true_cell_grid.shape[0]*true_cell_grid.shape[1])
-    else:
-        recall = 1
-    if pred_cell_grid.shape[0] > 0 and pred_cell_grid.shape[1] > 0:
-        precision = score / (pred_cell_grid.shape[0]*pred_cell_grid.shape[1])
-    else:
-        precision = 1
-
-    if precision > 0 and recall > 0:
-        fscore = 2 * precision * recall / (precision + recall)
-    else:
-        fscore = 0
+    fscore, precision, recall = compute_fscore(positive_match_score,
+                                               num_true,
+                                               num_pos)
     
-    return fscore, precision, recall, row_score, column_score
+    return fscore, precision, recall, upper_bound_score
 
 
 def lcs_similarity(string1, string2):
@@ -511,8 +549,53 @@ def output_to_dilatedbbox_grid(bboxes, labels, scores):
     return cell_grid
 
 
+def grits_top(true_relative_span_grid, pred_relative_span_grid):
+    """
+    Compute GriTS_Top given two matrices of cell relative spans.
+
+    For the cell at grid location (i,j), let a(i,j) be its rowspan,
+    let β(i,j) be its colspan, let p(i,j) be the minimum row it occupies,
+    and let θ(i,j) be the minimum column it occupies. Its relative span is
+    bounding box [θ(i,j)-j, p(i,j)-i, θ(i,j)-j+β(i,j), p(i,j)-i+a(i,j)].
+
+    It gives the size and location of the cell each grid cell belongs to
+    relative to the current grid cell location, in grid coordinate units.
+    Note that for a non-spanning cell this will always be [0, 0, 1, 1].
+    """
+    return factored_2dmss(true_relative_span_grid,
+                          pred_relative_span_grid,
+                          reward_function=eval_utils.iou)
+
+
+def grits_loc(true_bbox_grid, pred_bbox_grid):
+    """
+    Compute GriTS_Loc given two matrices of cell bounding boxes.
+    """
+    return factored_2dmss(true_bbox_grid,
+                          pred_bbox_grid,
+                          reward_function=eval_utils.iou)
+
+
+def grits_con(true_text_grid, pred_text_grid):
+    """
+    Compute GriTS_Con given two matrices of cell text strings.
+    """
+    return factored_2dmss(true_text_grid,
+                          pred_text_grid,
+                          reward_function=lcs_similarity)
+
+
 def compute_metrics(true_bboxes, true_labels, true_scores, true_cells,
                     pred_bboxes, pred_labels, pred_scores, pred_cells):
+    """
+    Compute the collection of table structure recognition metrics given
+    the ground truth and predictions as input.
+
+    - bboxes, labels, and scores are required to compute GriTS_RawLoc, which
+      is GriTS_Loc but on unprocessed bounding boxes, compared with the dilated
+      ground truth bounding boxes the model is trained on.
+    - Otherwise, only true_cells and pred_cells are needed.
+    """
 
     # Compute grids/matrices for comparison
     true_cell_dilatedbbox_grid = np.array(output_to_dilatedbbox_grid(true_bboxes, true_labels, true_scores))
@@ -525,38 +608,46 @@ def compute_metrics(true_bboxes, true_labels, true_scores, true_cells,
     pred_bbox_grid = np.array(cells_to_grid(pred_cells, key='bbox'))
     pred_text_grid = np.array(cells_to_grid(pred_cells, key='cell_text'), dtype=object)
 
-    #---Compute each of the metrics
     metrics = {}
-    (metrics['grits_rawloc'], metrics['grits_precision_rawloc'],
-     metrics['grits_recall_rawloc'], metrics['grits_rawloc_rowbased'],
-     metrics['grits_rawloc_columnbased']) = factored_2dlcs(true_cell_dilatedbbox_grid,
-                                                pred_cell_dilatedbbox_grid,
-                                                reward_function=eval_utils.iou)
 
-    (metrics['grits_top'], metrics['grits_precision_top'],
-     metrics['grits_recall_top'], metrics['grits_top_rowbased'],
-     metrics['grits_top_columnbased']) = factored_2dlcs(true_relspan_grid,
-                                             pred_relspan_grid,
-                                             reward_function=eval_utils.iou)
+    # Compute GriTS_RawLoc (location using unprocessed bounding boxes)
+    (metrics['grits_rawloc'],
+     metrics['grits_precision_rawloc'],
+     metrics['grits_recall_rawloc'],
+     metrics['grits_rawloc_upper_bound']) = grits_loc(true_cell_dilatedbbox_grid,
+                                                      pred_cell_dilatedbbox_grid)
 
-    (metrics['grits_loc'], metrics['grits_precision_loc'],
-     metrics['grits_recall_loc'], metrics['grits_loc_rowbased'],
-     metrics['grits_loc_columnbased']) = factored_2dlcs(true_bbox_grid,
-                                             pred_bbox_grid,
-                                             reward_function=eval_utils.iou)
+    # Compute GriTS_Top (topology)
+    (metrics['grits_top'],
+     metrics['grits_precision_top'],
+     metrics['grits_recall_top'],
+     metrics['grits_top_upper_bound']) = grits_top(true_relspan_grid,
+                                                   pred_relspan_grid)
 
-    (metrics['grits_con'], metrics['grits_precision_con'],
-     metrics['grits_recall_con'], metrics['grits_con_rowbased'],
-     metrics['grits_con_columnbased']) = factored_2dlcs(true_text_grid,
-                                             pred_text_grid,
-                                             reward_function=lcs_similarity)
+    # Compute GriTS_Loc (location)
+    (metrics['grits_loc'],
+     metrics['grits_precision_loc'],
+     metrics['grits_recall_loc'],
+     metrics['grits_loc_upper_bound']) = grits_loc(true_bbox_grid,
+                                                   pred_bbox_grid)
+
+    # Compute GriTS_Con (text content)
+    (metrics['grits_con'],
+     metrics['grits_precision_con'],
+     metrics['grits_recall_con'],
+     metrics['grits_con_upper_bound']) = grits_con(true_text_grid,
+                                                   pred_text_grid)
+
+    # Compute content accuracy
     metrics['acc_con'] = int(metrics['grits_con'] == 1)
 
+    # Compute original DAR (directed adjacency relations) metric
     (metrics['dar_original_recall_con'], metrics['dar_original_precision_con'],
-     metrics['dar_original_con']) = adjacency_metric(true_cells, pred_cells)
+     metrics['dar_original_con']) = dar_con_original(true_cells, pred_cells)
 
+    # Compute updated DAR (directed adjacency relations) metric
     (metrics['dar_recall_con'], metrics['dar_precision_con'],
-     metrics['dar_con']) = adjacency_with_blanks_metric(true_cells, pred_cells)
+     metrics['dar_con']) = dar_con_new(true_cells, pred_cells)
 
     return metrics
 
