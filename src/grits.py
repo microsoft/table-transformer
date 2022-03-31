@@ -585,7 +585,7 @@ def grits_con(true_text_grid, pred_text_grid):
                           reward_function=lcs_similarity)
 
 
-def compute_metrics(true_bboxes, true_labels, true_scores, true_cells,
+def compute_metrics(mode, true_bboxes, true_labels, true_scores, true_cells,
                     pred_bboxes, pred_labels, pred_scores, pred_cells):
     """
     Compute the collection of table structure recognition metrics given
@@ -596,26 +596,15 @@ def compute_metrics(true_bboxes, true_labels, true_scores, true_cells,
       ground truth bounding boxes the model is trained on.
     - Otherwise, only true_cells and pred_cells are needed.
     """
+    metrics = {}
 
     # Compute grids/matrices for comparison
-    true_cell_dilatedbbox_grid = np.array(output_to_dilatedbbox_grid(true_bboxes, true_labels, true_scores))
     true_relspan_grid = np.array(cells_to_relspan_grid(true_cells))
     true_bbox_grid = np.array(cells_to_grid(true_cells, key='bbox'))
     true_text_grid = np.array(cells_to_grid(true_cells, key='cell_text'), dtype=object)
-
-    pred_cell_dilatedbbox_grid = np.array(output_to_dilatedbbox_grid(pred_bboxes, pred_labels, pred_scores))
     pred_relspan_grid = np.array(cells_to_relspan_grid(pred_cells))
     pred_bbox_grid = np.array(cells_to_grid(pred_cells, key='bbox'))
     pred_text_grid = np.array(cells_to_grid(pred_cells, key='cell_text'), dtype=object)
-
-    metrics = {}
-
-    # Compute GriTS_RawLoc (location using unprocessed bounding boxes)
-    (metrics['grits_rawloc'],
-     metrics['grits_precision_rawloc'],
-     metrics['grits_recall_rawloc'],
-     metrics['grits_rawloc_upper_bound']) = grits_loc(true_cell_dilatedbbox_grid,
-                                                      pred_cell_dilatedbbox_grid)
 
     # Compute GriTS_Top (topology)
     (metrics['grits_top'],
@@ -641,13 +630,25 @@ def compute_metrics(true_bboxes, true_labels, true_scores, true_cells,
     # Compute content accuracy
     metrics['acc_con'] = int(metrics['grits_con'] == 1)
 
-    # Compute original DAR (directed adjacency relations) metric
-    (metrics['dar_original_recall_con'], metrics['dar_original_precision_con'],
-     metrics['dar_original_con']) = dar_con_original(true_cells, pred_cells)
+    if mode == 'grits-all':
+        # Compute grids/matrices for comparison
+        true_cell_dilatedbbox_grid = np.array(output_to_dilatedbbox_grid(true_bboxes, true_labels, true_scores))
+        pred_cell_dilatedbbox_grid = np.array(output_to_dilatedbbox_grid(pred_bboxes, pred_labels, pred_scores))
 
-    # Compute updated DAR (directed adjacency relations) metric
-    (metrics['dar_recall_con'], metrics['dar_precision_con'],
-     metrics['dar_con']) = dar_con_new(true_cells, pred_cells)
+        # Compute GriTS_RawLoc (location using unprocessed bounding boxes)
+        (metrics['grits_rawloc'],
+        metrics['grits_precision_rawloc'],
+        metrics['grits_recall_rawloc'],
+        metrics['grits_rawloc_upper_bound']) = grits_loc(true_cell_dilatedbbox_grid,
+                                                        pred_cell_dilatedbbox_grid)
+
+        # Compute original DAR (directed adjacency relations) metric
+        (metrics['dar_recall_con_original'], metrics['dar_precision_con_original'],
+        metrics['dar_con_original']) = dar_con_original(true_cells, pred_cells)
+
+        # Compute updated DAR (directed adjacency relations) metric
+        (metrics['dar_recall_con'], metrics['dar_precision_con'],
+        metrics['dar_con']) = dar_con_new(true_cells, pred_cells)
 
     return metrics
 
@@ -728,19 +729,59 @@ def plot_graph(metric_1, metric_2, metric_1_name, metric_2_name):
     plt.show()
 
 
-def print_metrics_summary(table_type, sample_metrics):
+def compute_metrics_summary(sample_metrics, mode):
     """
     Print a formatted summary of the table structure recognition metrics
     averaged over all samples.
     """
-    print("Results on {} tables ({} total):".format(table_type, len(sample_metrics)))
-    print("              GriTS_RawLoc: {:.4f}".format(np.mean([elem['grits_rawloc'] for elem in sample_metrics])))
-    print("                 GriTS_Loc: {:.4f}".format(np.mean([elem['grits_loc'] for elem in sample_metrics])))
-    print("                 GriTS_Con: {:.4f}".format(np.mean([elem['grits_con'] for elem in sample_metrics])))
-    print("                 GriTS_Top: {:.4f}".format(np.mean([elem['grits_top'] for elem in sample_metrics])))
-    print("DAR_Con (original version): {:.4f}".format(np.mean([elem['dar_original_con'] for elem in sample_metrics])))
-    print("                   DAR_Con: {:.4f}".format(np.mean([elem['dar_con'] for elem in sample_metrics])))
-    print("              Accuracy_Con: {:.4f}".format(np.mean([elem['acc_con'] for elem in sample_metrics])))
+
+    metrics_summary = {}
+
+    metric_names = ['acc_con', 'grits_top', 'grits_con', 'grits_loc']
+    if mode == 'grits-all':
+        metric_names += ['grits_rawloc', 'dar_con_original', 'dar_con']
+
+    simple_samples = [entry for entry in sample_metrics if entry['num_spanning_cells'] == 0]
+    metrics_summary['simple'] = {'num_tables': len(simple_samples)}
+    if len(simple_samples) > 0:
+        for metric_name in metric_names:
+            metrics_summary['simple'][metric_name] = np.mean([elem[metric_name] for elem in simple_samples])
+
+    complex_samples = [entry for entry in sample_metrics if entry['num_spanning_cells'] > 0]
+    metrics_summary['complex'] = {'num_tables': len(complex_samples)}
+    if len(complex_samples) > 0:
+        for metric_name in metric_names:
+            metrics_summary['complex'][metric_name] = np.mean([elem[metric_name] for elem in complex_samples])
+
+    metrics_summary['all'] = {'num_tables': len(sample_metrics)}
+    if len(sample_metrics) > 0:
+        for metric_name in metric_names:
+            metrics_summary['all'][metric_name] = np.mean([elem[metric_name] for elem in sample_metrics])
+
+    return metrics_summary
+
+
+def print_metrics_summary(metrics_summary):
+    """
+    Print a formatted summary of the table structure recognition metrics
+    averaged over all samples.
+    """
+
+    print('-' * 100)
+    for table_type in ['simple', 'complex', 'all']:
+        metrics = metrics_summary[table_type]
+        print("Results on {} tables ({} total):".format(table_type, metrics['num_tables']))
+        print("      Accuracy_Con: {:.4f}".format(metrics['acc_con']))
+        print("         GriTS_Top: {:.4f}".format(metrics['grits_top']))
+        print("         GriTS_Con: {:.4f}".format(metrics['grits_con']))
+        print("         GriTS_Loc: {:.4f}".format(metrics['grits_loc']))
+        if 'grits_rawloc' in metrics:
+            print("      GriTS_RawLoc: {:.4f}".format(metrics['grits_rawloc']))
+        if 'dar_con_original' in metrics:
+            print("DAR_Con (original): {:.4f}".format(metrics['dar_con_original']))
+        if 'dar_con' in metrics:
+            print("           DAR_Con: {:.4f}".format(metrics['dar_con']))
+        print('-' * 50)
 
 
 def grits(args, model, dataset_test, device):
@@ -797,9 +838,9 @@ def grits(args, model, dataset_test, device):
         true_bboxes = [list(elem) for elem in gt['boxes'].cpu().numpy()]
         true_labels = gt['labels'].cpu().numpy()
         true_scores = [1 for elem in true_bboxes]
-        true_table_structures, true_cells, true_confidence_score = objects_to_cells(true_bboxes, true_labels, true_scores,
-                                                                                    page_tokens, structure_class_names,
-                                                                                    structure_class_thresholds, structure_class_map)
+        true_table_structures, true_cells, _ = objects_to_cells(true_bboxes, true_labels, true_scores,
+                                                                page_tokens, structure_class_names,
+                                                                structure_class_thresholds, structure_class_map)
 
         #---Compute predicted features
         # Propagate through the model
@@ -814,11 +855,11 @@ def grits(args, model, dataset_test, device):
         pred_bboxes = [bbox.tolist() for bbox in rescaled_bboxes]
         pred_labels = labels[0].tolist()
         pred_scores = scores[0].tolist()
-        pred_table_structures, pred_cells, pred_confidence_score = objects_to_cells(pred_bboxes, pred_labels, pred_scores,
-                                                                                    page_tokens, structure_class_names,
-                                                                                    structure_class_thresholds, structure_class_map)
+        _, pred_cells, _ = objects_to_cells(pred_bboxes, pred_labels, pred_scores,
+                                            page_tokens, structure_class_names,
+                                            structure_class_thresholds, structure_class_map)
 
-        metrics = compute_metrics(true_bboxes, true_labels, true_scores, true_cells,
+        metrics = compute_metrics(args.mode, true_bboxes, true_labels, true_scores, true_cells,
                                   pred_bboxes, pred_labels, pred_scores, pred_cells)
         statistics = compute_statistics(true_table_structures, true_cells)
 
@@ -829,12 +870,13 @@ def grits(args, model, dataset_test, device):
         #---Display output for debugging
         if args.debug:
             print("Sample {}:".format(idx+1))
-            print("              GriTS_RawLoc: {:.4f}".format(metrics["grits_rawloc"]))
             print("                 GriTS_Loc: {:.4f}".format(metrics["grits_loc"]))
             print("                 GriTS_Con: {:.4f}".format(metrics["grits_con"]))
             print("                 GriTS_Top: {:.4f}".format(metrics["grits_top"]))
-            print("DAR_Con (original version): {:.4f}".format(metrics["dar_original_con"]))
-            print("                   DAR_Con: {:.4f}".format(metrics["dar_con"]))
+            if args.mode == 'grits-all':
+                print("              GriTS_RawLoc: {:.4f}".format(metrics["grits_rawloc"]))
+                print("DAR_Con (original version): {:.4f}".format(metrics["dar_original_con"]))
+                print("                   DAR_Con: {:.4f}".format(metrics["dar_con"]))
 
             fig,ax = plt.subplots(1)
             ax.imshow(img_test, interpolation='lanczos')
@@ -941,20 +983,11 @@ def grits(args, model, dataset_test, device):
                     json.dump(all_metrics, outfile)
             print("Total time taken for {} samples: {}".format(idx+1, datetime.now() - st_time))
 
-    print('-' * 100)
-    # Print metrics summary for simple tables
-    sample_metrics = [result for result in all_metrics if result['num_spanning_cells'] == 0]
-    print_metrics_summary('simple', sample_metrics)
+    # Compute metrics averaged over all samples
+    metrics_summary = compute_metrics_summary(all_metrics, args.mode)
 
-    print('-' * 50)
-    # Print metrics summary for complex tables
-    sample_metrics = [result for result in all_metrics if result['num_spanning_cells'] > 0]
-    print_metrics_summary('complex', sample_metrics)
-
-    print('-' * 50)
-    # Print metrics summary for all tables
-    print_metrics_summary('all', all_metrics)
-    print('-' * 50)
+    # Print summary of metrics
+    print_metrics_summary(metrics_summary)
 
     # We can plot the graphs to see the correlation between different variations
     # of similarity metrics by using plot_graph fn as shown below

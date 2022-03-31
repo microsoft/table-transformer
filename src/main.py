@@ -45,7 +45,7 @@ def get_args():
     parser.add_argument('--table_words_dir',
                         help="Folder containg the bboxes of table words")
     parser.add_argument('--mode',
-                        choices=['train', 'eval', 'grits'],
+                        choices=['train', 'eval', 'grits', 'grits-all'],
                         default='train',
                         help="Toggle between different modes")
     parser.add_argument('--debug', action='store_true')
@@ -207,11 +207,12 @@ def get_data(args):
                                       num_workers=args.num_workers)
         return data_loader_test, dataset_test
 
-    elif args.mode == "grits":
+    elif args.mode == "grits" or args.mode == "grits-all":
         dataset_test = PDFTablesDataset(os.path.join(args.data_root_dir,
                                                      "test"),
                                         RandomMaxResize(1000, 1000),
                                         include_original=True,
+                                        max_size=40,
                                         make_coco=False,
                                         image_extension=".jpg",
                                         xml_fileset="test_filelist.txt",
@@ -376,7 +377,7 @@ def main():
         train(args, model, criterion, postprocessors, device)
     elif args.mode == "eval":
         eval(args, model, criterion, postprocessors, device)
-    elif args.mode == "grits":
+    elif args.mode == "grits" or args.mode == 'grits-all':
         assert args.data_type == "structure", "GriTS is only applicable to structure recognition"
         dataset_test = get_data(args)
         grits(args, model, dataset_test, device)
