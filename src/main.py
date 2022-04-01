@@ -18,7 +18,7 @@ import util.misc as utils
 import datasets.transforms as R
 
 from table_datasets import PDFTablesDataset, TightAnnotationCrop, RandomPercentageCrop, RandomErasingWithTarget, ToPILImageWithTarget, RandomMaxResize, RandomCrop
-from grits import grits
+from eval import grits
 
 
 def get_args():
