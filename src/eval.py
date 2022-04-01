@@ -18,6 +18,7 @@ import matplotlib.patches as patches
 from fitz import Rect
 
 sys.path.append("../detr")
+from engine import evaluate
 import eval_utils
 
 
@@ -784,10 +785,10 @@ def print_metrics_summary(metrics_summary):
         print('-' * 50)
 
 
-def grits(args, model, dataset_test, device):
+def eval_tsr(args, model, dataset_test, device):
     """
-    This function runs the GriTS proposed in the paper. We also have a debug
-    mode which let's you see the outputs of a model on the pdf pages.
+    Compute table structure recognition (TSR) metrics, including
+    grid table similarity (GriTS) and directed adjacency relations (DAR).
     """
     structure_class_names = [
         'table', 'table column', 'table row', 'table column header',
@@ -993,6 +994,19 @@ def grits(args, model, dataset_test, device):
     # of similarity metrics by using plot_graph fn as shown below
     #
     # plot_graph([result[0] for result in results], [result[2] for result in results], "Raw BBox IoU", "BBox IoU")
+
+
+def eval_coco(model, criterion, postprocessors, data_loader_test, dataset_test, device):
+    """
+    Use this function to do COCO evaluation. Default implementation runs it on
+    the test set.
+    """
+    pubmed_stats, coco_evaluator = evaluate(model, criterion, postprocessors,
+                                            data_loader_test, dataset_test,
+                                            device, None)
+    print("pubmed: AP50: {:.3f}, AP75: {:.3f}, AP: {:.3f}, AR: {:.3f}".format(
+        pubmed_stats['coco_eval_bbox'][1], pubmed_stats['coco_eval_bbox'][2],
+        pubmed_stats['coco_eval_bbox'][0], pubmed_stats['coco_eval_bbox'][8]))
 
 
 if __name__ == "__main__":

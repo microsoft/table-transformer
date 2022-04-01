@@ -18,7 +18,7 @@ import util.misc as utils
 import datasets.transforms as R
 
 from table_datasets import PDFTablesDataset, TightAnnotationCrop, RandomPercentageCrop, RandomErasingWithTarget, ToPILImageWithTarget, RandomMaxResize, RandomCrop
-from eval import grits
+from eval import eval_coco, eval_tsr
 
 
 def get_args():
@@ -241,20 +241,6 @@ def get_model(args, device):
     return model, criterion, postprocessors
 
 
-def eval(args, model, criterion, postprocessors, device):
-    """
-    Use this function to do COCO evaluation. Default implementation runs it on
-    the test set.
-    """
-    data_loader_test, dataset_test = get_data(args)
-    pubmed_stats, coco_evaluator = evaluate(model, criterion, postprocessors,
-                                            data_loader_test, dataset_test,
-                                            device, None)
-    print("pubmed: AP50: {:.3f}, AP75: {:.3f}, AP: {:.3f}, AR: {:.3f}".format(
-        pubmed_stats['coco_eval_bbox'][1], pubmed_stats['coco_eval_bbox'][2],
-        pubmed_stats['coco_eval_bbox'][0], pubmed_stats['coco_eval_bbox'][8]))
-
-
 def train(args, model, criterion, postprocessors, device):
     """
     Training loop
@@ -375,11 +361,12 @@ def main():
     if args.mode == "train":
         train(args, model, criterion, postprocessors, device)
     elif args.mode == "eval":
-        eval(args, model, criterion, postprocessors, device)
+        data_loader_test, dataset_test = get_data(args)
+        eval_coco(model, criterion, postprocessors, data_loader_test, dataset_test, device)
     elif args.mode == "grits" or args.mode == 'grits-all':
         assert args.data_type == "structure", "GriTS is only applicable to structure recognition"
         dataset_test = get_data(args)
-        grits(args, model, dataset_test, device)
+        eval_tsr(args, model, dataset_test, device)
 
 
 if __name__ == "__main__":
