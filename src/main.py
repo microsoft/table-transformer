@@ -212,7 +212,6 @@ def get_data(args):
                                                      "test"),
                                         RandomMaxResize(1000, 1000),
                                         include_original=True,
-                                        max_size=40,
                                         make_coco=False,
                                         image_extension=".jpg",
                                         xml_fileset="test_filelist.txt",
