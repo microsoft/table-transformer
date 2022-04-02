@@ -3,7 +3,6 @@ Copyright (C) 2021 Microsoft Corporation
 """
 from collections import defaultdict
 
-import fitz
 from fitz import Rect
 
 
@@ -577,7 +576,7 @@ def align_supercells(supercells, rows, columns):
         # Determine vertical span of aligned supercell
         for row_num in intersecting_rows:
             if row_bbox_rect is None:
-                row_bbox_rect = fitz.Rect(rows[row_num]['bbox'])
+                row_bbox_rect = Rect(rows[row_num]['bbox'])
             else:
                 row_bbox_rect = row_bbox_rect.includeRect(rows[row_num]['bbox'])
         if row_bbox_rect is None:
@@ -601,7 +600,7 @@ def align_supercells(supercells, rows, columns):
             if overlap_fraction >= 0.5:
                 intersecting_cols.append(col_num)
                 if col_bbox_rect is None:
-                    col_bbox_rect = fitz.Rect(col['bbox'])
+                    col_bbox_rect = Rect(col['bbox'])
                 else:
                     col_bbox_rect = col_bbox_rect.includeRect(col['bbox'])
         if col_bbox_rect is None:
