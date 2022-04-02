@@ -17,60 +17,13 @@ from fitz import Rect
 
 sys.path.append("../detr")
 from engine import evaluate
-import eval_utils
+import postprocess
+import grits
 from grits import grits_con, grits_top, grits_loc
 
 
-def get_supercell_rows_and_columns(supercells, rows, columns):
-    matches_by_supercell = []
-    all_matches = set()
-    for supercell in supercells:
-        row_matches = set()
-        column_matches = set()
-        for row_num, row in enumerate(rows):
-            bbox1 = [
-                supercell['bbox'][0], row['bbox'][1], supercell['bbox'][2],
-                row['bbox'][3]
-            ]
-            bbox2 = Rect(supercell['bbox']).intersect(bbox1)
-            if bbox2.getArea() / Rect(bbox1).getArea() >= 0.5:
-                row_matches.add(row_num)
-        for column_num, column in enumerate(columns):
-            bbox1 = [
-                column['bbox'][0], supercell['bbox'][1], column['bbox'][2],
-                supercell['bbox'][3]
-            ]
-            bbox2 = Rect(supercell['bbox']).intersect(bbox1)
-            if bbox2.getArea() / Rect(bbox1).getArea() >= 0.5:
-                column_matches.add(column_num)
-        already_taken = False
-        this_matches = []
-        for row_num in row_matches:
-            for column_num in column_matches:
-                this_matches.append((row_num, column_num))
-                if (row_num, column_num) in all_matches:
-                    already_taken = True
-        if not already_taken:
-            for match in this_matches:
-                all_matches.add(match)
-            matches_by_supercell.append(this_matches)
-            row_nums = [elem[0] for elem in this_matches]
-            column_nums = [elem[1] for elem in this_matches]
-            row_rect = Rect()
-            for row_num in row_nums:
-                row_rect.includeRect(rows[row_num]['bbox'])
-            column_rect = Rect()
-            for column_num in column_nums:
-                column_rect.includeRect(columns[column_num]['bbox'])
-            supercell['bbox'] = list(row_rect.intersect(column_rect))
-        else:
-            matches_by_supercell.append([])
-
-    return matches_by_supercell
-
-
 def objects_to_cells(bboxes, labels, scores, page_tokens, structure_class_names, structure_class_thresholds, structure_class_map):
-    bboxes, scores, labels = eval_utils.apply_class_thresholds(bboxes, labels, scores,
+    bboxes, scores, labels = postprocess.apply_class_thresholds(bboxes, labels, scores,
                                             structure_class_names,
                                             structure_class_thresholds)
 
@@ -88,10 +41,10 @@ def objects_to_cells(bboxes, labels, scores, page_tokens, structure_class_names,
     except:
         table_bbox = (0,0,1000,1000)
     
-    tokens_in_table = [token for token in page_tokens if eval_utils.iob(token['bbox'], table_bbox) >= 0.5]
+    tokens_in_table = [token for token in page_tokens if postprocess.iob(token['bbox'], table_bbox) >= 0.5]
     
     # Determine the table cell structure from the objects
-    table_structures, cells, confidence_score = eval_utils.objects_to_cells(table, table_objects, tokens_in_table,
+    table_structures, cells, confidence_score = postprocess.objects_to_cells(table, table_objects, tokens_in_table,
                                                                     structure_class_names,
                                                                     structure_class_thresholds)
     
@@ -254,7 +207,7 @@ def dar_con(true_adjacencies, pred_adjacencies):
 
     num_true_positives = (sum(true_c.values()) - sum((true_c - pred_c).values()))
 
-    fscore, precision, recall = eval_utils.compute_fscore(num_true_positives,
+    fscore, precision, recall = grits.compute_fscore(num_true_positives,
                                                len(true_adjacencies),
                                                len(pred_adjacencies))
 
@@ -281,65 +234,6 @@ def dar_con_new(true_cells, pred_cells):
     return dar_con(true_adjacencies, pred_adjacencies)
 
 
-def cells_to_grid(cells, key='bbox'):
-    if len(cells) == 0:
-        return [[]]
-    num_rows = max([max(cell['row_nums']) for cell in cells])+1
-    num_columns = max([max(cell['column_nums']) for cell in cells])+1
-    cell_grid = np.zeros((num_rows, num_columns)).tolist()
-    for cell in cells:
-        for row_num in cell['row_nums']:
-            for column_num in cell['column_nums']:
-                cell_grid[row_num][column_num] = cell[key]
-                
-    return cell_grid
-
-
-def cells_to_relspan_grid(cells):
-    if len(cells) == 0:
-        return [[]]
-    num_rows = max([max(cell['row_nums']) for cell in cells])+1
-    num_columns = max([max(cell['column_nums']) for cell in cells])+1
-    cell_grid = np.zeros((num_rows, num_columns)).tolist()
-    for cell in cells:
-        min_row_num = min(cell['row_nums'])
-        min_column_num = min(cell['column_nums'])
-        max_row_num = max(cell['row_nums']) + 1
-        max_column_num = max(cell['column_nums']) + 1
-        for row_num in cell['row_nums']:
-            for column_num in cell['column_nums']:
-                cell_grid[row_num][column_num] = [
-                    min_column_num - column_num,
-                    min_row_num - row_num,
-                    max_column_num - column_num,
-                    max_row_num - row_num, 
-                ]
-                
-    return cell_grid 
-
-
-def output_to_dilatedbbox_grid(bboxes, labels, scores):
-    rows = [{'bbox': bbox} for bbox, label in zip(bboxes, labels) if label == 2]
-    columns = [{'bbox': bbox} for bbox, label in zip(bboxes, labels) if label == 1]
-    supercells = [{'bbox': bbox, 'score': 1} for bbox, label in zip(bboxes, labels) if label in [4, 5]]
-    rows.sort(key=lambda x: x['bbox'][1]+x['bbox'][3])
-    columns.sort(key=lambda x: x['bbox'][0]+x['bbox'][2])
-    supercells.sort(key=lambda x: -x['score'])
-    cell_grid = []
-    for row_num, row in enumerate(rows):
-        column_grid = []
-        for column_num, column in enumerate(columns):
-            bbox = Rect(row['bbox']).intersect(column['bbox'])
-            column_grid.append(list(bbox))
-        cell_grid.append(column_grid)
-    matches_by_supercell = get_supercell_rows_and_columns(supercells, rows, columns)
-    for matches, supercell in zip(matches_by_supercell, supercells):
-        for match in matches:
-            cell_grid[match[0]][match[1]] = supercell['bbox']
-    
-    return cell_grid
-
-
 def compute_metrics(mode, true_bboxes, true_labels, true_scores, true_cells,
                     pred_bboxes, pred_labels, pred_scores, pred_cells):
     """
@@ -354,12 +248,12 @@ def compute_metrics(mode, true_bboxes, true_labels, true_scores, true_cells,
     metrics = {}
 
     # Compute grids/matrices for comparison
-    true_relspan_grid = np.array(cells_to_relspan_grid(true_cells))
-    true_bbox_grid = np.array(cells_to_grid(true_cells, key='bbox'))
-    true_text_grid = np.array(cells_to_grid(true_cells, key='cell_text'), dtype=object)
-    pred_relspan_grid = np.array(cells_to_relspan_grid(pred_cells))
-    pred_bbox_grid = np.array(cells_to_grid(pred_cells, key='bbox'))
-    pred_text_grid = np.array(cells_to_grid(pred_cells, key='cell_text'), dtype=object)
+    true_relspan_grid = np.array(grits.cells_to_relspan_grid(true_cells))
+    true_bbox_grid = np.array(grits.cells_to_grid(true_cells, key='bbox'))
+    true_text_grid = np.array(grits.cells_to_grid(true_cells, key='cell_text'), dtype=object)
+    pred_relspan_grid = np.array(grits.cells_to_relspan_grid(pred_cells))
+    pred_bbox_grid = np.array(grits.cells_to_grid(pred_cells, key='bbox'))
+    pred_text_grid = np.array(grits.cells_to_grid(pred_cells, key='cell_text'), dtype=object)
 
     # Compute GriTS_Top (topology)
     (metrics['grits_top'],
@@ -387,8 +281,8 @@ def compute_metrics(mode, true_bboxes, true_labels, true_scores, true_cells,
 
     if mode == 'grits-all':
         # Compute grids/matrices for comparison
-        true_cell_dilatedbbox_grid = np.array(output_to_dilatedbbox_grid(true_bboxes, true_labels, true_scores))
-        pred_cell_dilatedbbox_grid = np.array(output_to_dilatedbbox_grid(pred_bboxes, pred_labels, pred_scores))
+        true_cell_dilatedbbox_grid = np.array(grits.output_to_dilatedbbox_grid(true_bboxes, true_labels, true_scores))
+        pred_cell_dilatedbbox_grid = np.array(grits.output_to_dilatedbbox_grid(pred_bboxes, pred_labels, pred_scores))
 
         # Compute GriTS_RawLoc (location using unprocessed bounding boxes)
         (metrics['grits_rawloc'],

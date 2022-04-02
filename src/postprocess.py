@@ -2,7 +2,6 @@
 Copyright (C) 2021 Microsoft Corporation
 """
 from collections import defaultdict
-from difflib import SequenceMatcher
 
 from fitz import Rect
 
@@ -57,14 +56,6 @@ def iob(bbox1, bbox2):
         return intersection.getArea() / bbox1_area
     
     return 0
-
-
-def lcs_similarity(string1, string2):
-    if len(string1) == 0 and len(string2) == 0:
-        return 1
-    s = SequenceMatcher(None, string1, string2)
-    lcs = ''.join([string1[block.a:(block.a + block.size)] for block in s.get_matching_blocks()])
-    return 2*len(lcs)/(len(string1)+len(string2))
 
 
 def objects_to_cells(table, objects_in_table, tokens_in_table, class_map, class_thresholds):
@@ -894,29 +885,3 @@ def remove_supercell_overlap(supercell1, supercell2):
             else:
                 supercell2['row_numbers'] = []
                 common_rows = set()
-
-
-def compute_fscore(num_true_positives, num_true, num_positives):
-    """
-    Compute the f-score or f-measure for a collection of predictions.
-
-    Conventions:
-    - precision is 1 when there are no predicted instances
-    - recall is 1 when there are no true instances
-    - fscore is 0 when recall or precision is 0
-    """
-    if num_positives > 0:
-        precision = num_true_positives / num_positives
-    else:
-        precision = 1
-    if num_true > 0:
-        recall = num_true_positives / num_true
-    else:
-        recall = 1
-        
-    if precision + recall > 0:
-        fscore = 2 * precision * recall / (precision + recall)
-    else:
-        fscore = 0
-
-    return fscore, precision, recall 

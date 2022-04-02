@@ -2,11 +2,36 @@
 Copyright (C) 2021 Microsoft Corporation
 """
 import itertools
+from difflib import SequenceMatcher
 
 import numpy as np
+from fitz import Rect
 
-import eval_utils
-from eval_utils import compute_fscore
+
+def compute_fscore(num_true_positives, num_true, num_positives):
+    """
+    Compute the f-score or f-measure for a collection of predictions.
+
+    Conventions:
+    - precision is 1 when there are no predicted instances
+    - recall is 1 when there are no true instances
+    - fscore is 0 when recall or precision is 0
+    """
+    if num_positives > 0:
+        precision = num_true_positives / num_positives
+    else:
+        precision = 1
+    if num_true > 0:
+        recall = num_true_positives / num_true
+    else:
+        recall = 1
+        
+    if precision + recall > 0:
+        fscore = 2 * precision * recall / (precision + recall)
+    else:
+        fscore = 0
+
+    return fscore, precision, recall 
 
 
 def initialize_DP(sequence1_length, sequence2_length):
@@ -184,6 +209,135 @@ def factored_2dmss(true_cell_grid, pred_cell_grid, reward_function):
     return fscore, precision, recall, upper_bound_score
 
 
+def lcs_similarity(string1, string2):
+    if len(string1) == 0 and len(string2) == 0:
+        return 1
+    s = SequenceMatcher(None, string1, string2)
+    lcs = ''.join([string1[block.a:(block.a + block.size)] for block in s.get_matching_blocks()])
+    return 2*len(lcs)/(len(string1)+len(string2))
+
+
+def iou(bbox1, bbox2):
+    """
+    Compute the intersection-over-union of two bounding boxes.
+    """
+    intersection = Rect(bbox1).intersect(bbox2)
+    union = Rect(bbox1).includeRect(bbox2)
+    
+    union_area = union.getArea()
+    if union_area > 0:
+        return intersection.getArea() / union.getArea()
+    
+    return 0
+
+
+def cells_to_grid(cells, key='bbox'):
+    if len(cells) == 0:
+        return [[]]
+    num_rows = max([max(cell['row_nums']) for cell in cells])+1
+    num_columns = max([max(cell['column_nums']) for cell in cells])+1
+    cell_grid = np.zeros((num_rows, num_columns)).tolist()
+    for cell in cells:
+        for row_num in cell['row_nums']:
+            for column_num in cell['column_nums']:
+                cell_grid[row_num][column_num] = cell[key]
+                
+    return cell_grid
+
+
+def cells_to_relspan_grid(cells):
+    if len(cells) == 0:
+        return [[]]
+    num_rows = max([max(cell['row_nums']) for cell in cells])+1
+    num_columns = max([max(cell['column_nums']) for cell in cells])+1
+    cell_grid = np.zeros((num_rows, num_columns)).tolist()
+    for cell in cells:
+        min_row_num = min(cell['row_nums'])
+        min_column_num = min(cell['column_nums'])
+        max_row_num = max(cell['row_nums']) + 1
+        max_column_num = max(cell['column_nums']) + 1
+        for row_num in cell['row_nums']:
+            for column_num in cell['column_nums']:
+                cell_grid[row_num][column_num] = [
+                    min_column_num - column_num,
+                    min_row_num - row_num,
+                    max_column_num - column_num,
+                    max_row_num - row_num, 
+                ]
+                
+    return cell_grid 
+
+
+def get_supercell_rows_and_columns(supercells, rows, columns):
+    matches_by_supercell = []
+    all_matches = set()
+    for supercell in supercells:
+        row_matches = set()
+        column_matches = set()
+        for row_num, row in enumerate(rows):
+            bbox1 = [
+                supercell['bbox'][0], row['bbox'][1], supercell['bbox'][2],
+                row['bbox'][3]
+            ]
+            bbox2 = Rect(supercell['bbox']).intersect(bbox1)
+            if bbox2.getArea() / Rect(bbox1).getArea() >= 0.5:
+                row_matches.add(row_num)
+        for column_num, column in enumerate(columns):
+            bbox1 = [
+                column['bbox'][0], supercell['bbox'][1], column['bbox'][2],
+                supercell['bbox'][3]
+            ]
+            bbox2 = Rect(supercell['bbox']).intersect(bbox1)
+            if bbox2.getArea() / Rect(bbox1).getArea() >= 0.5:
+                column_matches.add(column_num)
+        already_taken = False
+        this_matches = []
+        for row_num in row_matches:
+            for column_num in column_matches:
+                this_matches.append((row_num, column_num))
+                if (row_num, column_num) in all_matches:
+                    already_taken = True
+        if not already_taken:
+            for match in this_matches:
+                all_matches.add(match)
+            matches_by_supercell.append(this_matches)
+            row_nums = [elem[0] for elem in this_matches]
+            column_nums = [elem[1] for elem in this_matches]
+            row_rect = Rect()
+            for row_num in row_nums:
+                row_rect.includeRect(rows[row_num]['bbox'])
+            column_rect = Rect()
+            for column_num in column_nums:
+                column_rect.includeRect(columns[column_num]['bbox'])
+            supercell['bbox'] = list(row_rect.intersect(column_rect))
+        else:
+            matches_by_supercell.append([])
+
+    return matches_by_supercell
+
+
+def output_to_dilatedbbox_grid(bboxes, labels, scores):
+    rows = [{'bbox': bbox} for bbox, label in zip(bboxes, labels) if label == 2]
+    columns = [{'bbox': bbox} for bbox, label in zip(bboxes, labels) if label == 1]
+    supercells = [{'bbox': bbox, 'score': 1} for bbox, label in zip(bboxes, labels) if label in [4, 5]]
+    rows.sort(key=lambda x: x['bbox'][1]+x['bbox'][3])
+    columns.sort(key=lambda x: x['bbox'][0]+x['bbox'][2])
+    supercells.sort(key=lambda x: -x['score'])
+    cell_grid = []
+    for row_num, row in enumerate(rows):
+        column_grid = []
+        for column_num, column in enumerate(columns):
+            bbox = Rect(row['bbox']).intersect(column['bbox'])
+            column_grid.append(list(bbox))
+        cell_grid.append(column_grid)
+    matches_by_supercell = get_supercell_rows_and_columns(supercells, rows, columns)
+    for matches, supercell in zip(matches_by_supercell, supercells):
+        for match in matches:
+            cell_grid[match[0]][match[1]] = supercell['bbox']
+    
+    return cell_grid
+
+
 def grits_top(true_relative_span_grid, pred_relative_span_grid):
     """
     Compute GriTS_Top given two matrices of cell relative spans.
@@ -199,7 +353,7 @@ def grits_top(true_relative_span_grid, pred_relative_span_grid):
     """
     return factored_2dmss(true_relative_span_grid,
                           pred_relative_span_grid,
-                          reward_function=eval_utils.iou)
+                          reward_function=iou)
 
 
 def grits_loc(true_bbox_grid, pred_bbox_grid):
@@ -208,7 +362,7 @@ def grits_loc(true_bbox_grid, pred_bbox_grid):
     """
     return factored_2dmss(true_bbox_grid,
                           pred_bbox_grid,
-                          reward_function=eval_utils.iou)
+                          reward_function=iou)
 
 
 def grits_con(true_text_grid, pred_text_grid):
@@ -217,4 +371,4 @@ def grits_con(true_text_grid, pred_text_grid):
     """
     return factored_2dmss(true_text_grid,
                           pred_text_grid,
-                          reward_function=eval_utils.lcs_similarity)
+                          reward_function=lcs_similarity)
