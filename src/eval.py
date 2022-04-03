@@ -7,6 +7,10 @@ from collections import Counter
 import json
 import statistics as stat
 from datetime import datetime
+import multiprocessing
+from itertools import repeat
+from functools import partial
+import tqdm
 
 import torch
 from torchvision import transforms
@@ -20,6 +24,28 @@ from engine import evaluate
 import postprocess
 import grits
 from grits import grits_con, grits_top, grits_loc
+
+
+structure_class_names = [
+    'table', 'table column', 'table row', 'table column header',
+    'table projected row header', 'table spanning cell', 'no object'
+]
+structure_class_map = {k: v for v, k in enumerate(structure_class_names)}
+structure_class_thresholds = {
+    "table": 0.5,
+    "table column": 0.5,
+    "table row": 0.5,
+    "table column header": 0.5,
+    "table projected row header": 0.5,
+    "table spanning cell": 0.5,
+    "no object": 10
+}
+
+
+normalize = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+])
 
 
 def objects_to_cells(bboxes, labels, scores, page_tokens, structure_class_names, structure_class_thresholds, structure_class_map):
@@ -433,25 +459,58 @@ def print_metrics_summary(metrics_summary):
         print('-' * 50)
 
 
+def eval_tsr_sample(idx, table_words_dir, mode, model, dataset_test, device):
+    #---Read source data: image, objects, and word bounding boxes
+    img, gt, orig_img, img_path = dataset_test[idx]
+    img_filename = img_path.split("/")[-1]
+    img_words_filepath = os.path.join(table_words_dir, img_filename.replace(".jpg", "_words.json"))
+    with open(img_words_filepath, 'r') as f:
+        page_tokens = json.load(f)
+    img_test = img
+    scale = 1000 / max(orig_img.size)
+    img = normalize(img)
+    for word in page_tokens:
+        word['bbox'] = [elem * scale for elem in word['bbox']]
+
+    #---Compute ground truth features
+    true_bboxes = [list(elem) for elem in gt['boxes'].cpu().numpy()]
+    true_labels = gt['labels'].cpu().numpy()
+    true_scores = [1 for elem in true_bboxes]
+    true_table_structures, true_cells, _ = objects_to_cells(true_bboxes, true_labels, true_scores,
+                                                            page_tokens, structure_class_names,
+                                                            structure_class_thresholds, structure_class_map)
+
+    #---Compute predicted features
+    # Propagate through the model
+    with torch.no_grad():
+        outputs = model([img.to(device)])
+    boxes = outputs['pred_boxes']
+    m = outputs['pred_logits'].softmax(-1).max(-1)
+    scores = m.values
+    labels = m.indices
+    rescaled_bboxes = rescale_bboxes(boxes[0].cpu(), img_test.size)
+    pred_bboxes = [bbox.tolist() for bbox in rescaled_bboxes]
+    pred_labels = labels[0].tolist()
+    pred_scores = scores[0].tolist()
+    _, pred_cells, _ = objects_to_cells(pred_bboxes, pred_labels, pred_scores,
+                                        page_tokens, structure_class_names,
+                                        structure_class_thresholds, structure_class_map)
+
+    metrics = compute_metrics(mode, true_bboxes, true_labels, true_scores, true_cells,
+                                pred_bboxes, pred_labels, pred_scores, pred_cells)
+    statistics = compute_statistics(true_table_structures, true_cells)
+
+    metrics.update(statistics)
+    metrics['id'] = img_path.split('/')[-1].split('.')[0]
+
+    return metrics
+
+
 def eval_tsr(args, model, dataset_test, device):
     """
     Compute table structure recognition (TSR) metrics, including
     grid table similarity (GriTS) and directed adjacency relations (DAR).
     """
-    structure_class_names = [
-        'table', 'table column', 'table row', 'table column header',
-        'table projected row header', 'table spanning cell', 'no object'
-    ]
-    structure_class_map = {k: v for v, k in enumerate(structure_class_names)}
-    structure_class_thresholds = {
-        "table": 0.5,
-        "table column": 0.5,
-        "table row": 0.5,
-        "table column header": 0.5,
-        "table projected row header": 0.5,
-        "table spanning cell": 0.5,
-        "no object": 10
-    }
 
     if args.debug:
         max_samples = min(50, len(dataset_test))
@@ -459,189 +518,29 @@ def eval_tsr(args, model, dataset_test, device):
         max_samples = len(dataset_test)
     print("Evaluating {} samples...".format(max_samples))
 
-    normalize = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
-
     model.eval()
     all_metrics = []
     st_time = datetime.now()
 
-    for idx in range(0, max_samples):
-        print(idx, end='\r')
+    torch.multiprocessing.set_start_method('spawn')
+    with multiprocessing.Pool(4) as pool:
+        all_metrics = list(tqdm.tqdm(pool.imap_unordered(partial(eval_tsr_sample,
+                                                         table_words_dir=args.table_words_dir,
+                                                         mode=args.mode, model=model,
+                                                         dataset_test=dataset_test, device=device),
+                                     range(max_samples)), total=max_samples))
 
-        #---Read source data: image, objects, and word bounding boxes
-        img, gt, orig_img, img_path = dataset_test[idx]
-        img_filename = img_path.split("/")[-1]
-        img_words_filepath = os.path.join(args.table_words_dir, img_filename.replace(".jpg", "_words.json"))
-        with open(img_words_filepath, 'r') as f:
-            page_tokens = json.load(f)
-        img_test = img
-        scale = 1000 / max(orig_img.size)
-        img = normalize(img)
-        for word in page_tokens:
-            word['bbox'] = [elem * scale for elem in word['bbox']]
-
-        #---Compute ground truth features
-        true_bboxes = [list(elem) for elem in gt['boxes'].cpu().numpy()]
-        true_labels = gt['labels'].cpu().numpy()
-        true_scores = [1 for elem in true_bboxes]
-        true_table_structures, true_cells, _ = objects_to_cells(true_bboxes, true_labels, true_scores,
-                                                                page_tokens, structure_class_names,
-                                                                structure_class_thresholds, structure_class_map)
-
-        #---Compute predicted features
-        # Propagate through the model
-        with torch.no_grad():
-            outputs = model([img.to(device)])
-        boxes = outputs['pred_boxes']
-        m = outputs['pred_logits'].softmax(-1).max(-1)
-        scores = m.values
-        labels = m.indices
-        #rescaled_bboxes = rescale_bboxes(torch.tensor(boxes[0], dtype=torch.float32), img_test.size)
-        rescaled_bboxes = rescale_bboxes(boxes[0].cpu(), img_test.size)
-        pred_bboxes = [bbox.tolist() for bbox in rescaled_bboxes]
-        pred_labels = labels[0].tolist()
-        pred_scores = scores[0].tolist()
-        _, pred_cells, _ = objects_to_cells(pred_bboxes, pred_labels, pred_scores,
-                                            page_tokens, structure_class_names,
-                                            structure_class_thresholds, structure_class_map)
-
-        metrics = compute_metrics(args.mode, true_bboxes, true_labels, true_scores, true_cells,
-                                  pred_bboxes, pred_labels, pred_scores, pred_cells)
-        statistics = compute_statistics(true_table_structures, true_cells)
-
-        metrics.update(statistics)
-        metrics['id'] = img_path.split('/')[-1].split('.')[0]
-        all_metrics.append(metrics)
-
-        #---Display output for debugging
-        if args.debug:
-            print("Sample {}:".format(idx+1))
-            print("                 GriTS_Loc: {:.4f}".format(metrics["grits_loc"]))
-            print("                 GriTS_Con: {:.4f}".format(metrics["grits_con"]))
-            print("                 GriTS_Top: {:.4f}".format(metrics["grits_top"]))
-            if args.mode == 'grits-all':
-                print("              GriTS_RawLoc: {:.4f}".format(metrics["grits_rawloc"]))
-                print("DAR_Con (original version): {:.4f}".format(metrics["dar_original_con"]))
-                print("                   DAR_Con: {:.4f}".format(metrics["dar_con"]))
-
-            fig,ax = plt.subplots(1)
-            ax.imshow(img_test, interpolation='lanczos')
-            fig.set_size_inches((15, 18))
-            plt.show()
-
-            fig,ax = plt.subplots(1)
-            ax.imshow(img_test, interpolation='lanczos')
-
-            linewidth = 1
-            alpha = 0
-            for word in page_tokens:
-                bbox = word['bbox']
-                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                         edgecolor='none',facecolor="orange", alpha=0.04)
-                ax.add_patch(rect)
-                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                         edgecolor="orange",facecolor='none',linestyle="--")
-                ax.add_patch(rect)         
-            rescaled_bboxes = rescale_bboxes(boxes[0].cpu(), img_test.size)
-            for bbox, label, score in zip(rescaled_bboxes, labels[0].tolist(), scores[0].tolist()):
-                bbox = bbox.cpu().numpy().tolist()
-                if not label > 5 and score > 0.5:
-                    color, alpha, linewidth = get_bbox_decorations(label, score)
-                    rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=linewidth, 
-                                             edgecolor='none',facecolor=color, alpha=alpha)
-                    ax.add_patch(rect)
-                    rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=linewidth, 
-                                             edgecolor=color,facecolor='none',linestyle="--")
-                    ax.add_patch(rect) 
-
-            fig.set_size_inches((15, 18))
-            plt.show()
-
-            fig,ax = plt.subplots(1)
-            ax.imshow(img_test, interpolation='lanczos')    
-            for cell in true_cells:
-                bbox = cell['bbox']
-                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                         edgecolor='none',facecolor="brown", alpha=0.04)
-                ax.add_patch(rect)
-                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                         edgecolor="brown",facecolor='none',linestyle="--")
-                ax.add_patch(rect) 
-                cell_rect = Rect()
-                for span in cell['spans']:
-                    bbox = span['bbox']
-                    rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                             edgecolor='none',facecolor="green", alpha=0.2)
-                    ax.add_patch(rect)
-                    rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                             edgecolor="green",facecolor='none',linestyle="--")
-                    ax.add_patch(rect) 
-                    cell_rect.includeRect(bbox)
-                if cell_rect.getArea() > 0:
-                    bbox = list(cell_rect)
-                    rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                             edgecolor='none',facecolor="red", alpha=0.15)
-                    ax.add_patch(rect)
-                    rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                             edgecolor="red",facecolor='none',linestyle="--")
-                    ax.add_patch(rect)
-
-            fig.set_size_inches((15, 18))
-            plt.show()
-
-            fig,ax = plt.subplots(1)
-            ax.imshow(img_test, interpolation='lanczos')
-
-            for cell in pred_cells:
-                bbox = cell['bbox']
-                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                         edgecolor='none',facecolor="magenta", alpha=0.15)
-                ax.add_patch(rect)
-                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                         edgecolor="magenta",facecolor='none',linestyle="--")
-                ax.add_patch(rect) 
-                cell_rect = Rect()
-                for span in cell['spans']:
-                    bbox = span['bbox']
-                    rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                             edgecolor='none',facecolor="green", alpha=0.2)
-                    ax.add_patch(rect)
-                    rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                             edgecolor="green",facecolor='none',linestyle="--")
-                    ax.add_patch(rect) 
-                    cell_rect.includeRect(bbox)
-                if cell_rect.getArea() > 0:
-                    bbox = list(cell_rect)
-                    rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                             edgecolor='none',facecolor="red", alpha=0.15)
-                    ax.add_patch(rect)
-                    rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                             edgecolor="red",facecolor='none',linestyle="--")
-                    ax.add_patch(rect) 
-
-            fig.set_size_inches((15, 18))
-            plt.show()
-
-        if (idx+1) % 1000 == 0 or (idx+1) == max_samples:
-            # Save sample-level metrics for more analysis
-            if len(args.metrics_save_filepath) > 0:
-                with open(args.metrics_save_filepath, 'w') as outfile:
-                    json.dump(all_metrics, outfile)
-            print("Total time taken for {} samples: {}".format(idx+1, datetime.now() - st_time))
+    # Save sample-level metrics for more analysis
+    if len(args.metrics_save_filepath) > 0:
+        with open(args.metrics_save_filepath, 'w') as outfile:
+            json.dump(all_metrics, outfile)
+    print("Total time taken for {} samples: {}".format(max_samples, datetime.now() - st_time))
 
     # Compute metrics averaged over all samples
     metrics_summary = compute_metrics_summary(all_metrics, args.mode)
 
     # Print summary of metrics
     print_metrics_summary(metrics_summary)
-
-    # We can plot the graphs to see the correlation between different variations
-    # of similarity metrics by using plot_graph fn as shown below
-    #
-    # plot_graph([result[0] for result in results], [result[2] for result in results], "Raw BBox IoU", "BBox IoU")
 
 
 def eval_coco(model, criterion, postprocessors, data_loader_test, dataset_test, device):
