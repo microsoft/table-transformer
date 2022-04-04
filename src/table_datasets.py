@@ -284,13 +284,14 @@ def _isArrayLike(obj):
 
 class PDFTablesDataset(torch.utils.data.Dataset):
     def __init__(self, root, transforms=None, max_size=None, do_crop=True, make_coco=False,
-                 include_original=False, max_neg=None, negatives_root=None, xml_fileset="filelist.txt",
+                 include_eval=False, max_neg=None, negatives_root=None, xml_fileset="filelist.txt",
                 image_extension='.png', class_map=None):
         self.root = root
         self.transforms = transforms
         self.do_crop=do_crop
         self.make_coco = make_coco
         self.image_extension = image_extension
+        self.include_eval = include_eval
         self.class_map = class_map
         self.class_list = list(class_map)
         self.class_set = set(class_map.values())
@@ -330,7 +331,6 @@ class PDFTablesDataset(torch.utils.data.Dataset):
             self.types += [0 for idx in range(len(neg_xml_page_ids))]
         
         self.has_mask = False
-        self.include_original = include_original
         
         if self.make_coco:
             self.dataset = {}
@@ -432,15 +432,17 @@ class PDFTablesDataset(torch.utils.data.Dataset):
         target["iscrowd"] = torch.zeros((num_objs,), dtype=torch.int64)
         target["orig_size"] = torch.as_tensor([int(h), int(w)])
         target["size"] = torch.as_tensor([int(h), int(w)])
-        
+
+        if self.include_eval:
+            target["img_path"] = img_path
 
         if self.transforms is not None:
             img_tensor, target = self.transforms(img, target)
+        
+        #if self.include_original:
+        #    return img_tensor, target, img, img_path
 
-        if self.include_original:
-            return img_tensor, target, img, img_path
-        else:
-            return img_tensor, target
+        return img_tensor, target
 
     def __len__(self):
         return len(self.page_ids)

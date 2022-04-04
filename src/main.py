@@ -154,6 +154,7 @@ def get_data(args):
             os.path.join(args.data_root_dir, "train"),
             get_transform(args.data_type, "train"),
             do_crop=False,
+            include_eval=False,
             max_neg=0,
             make_coco=False,
             image_extension=".jpg",
@@ -162,6 +163,7 @@ def get_data(args):
         dataset_val = PDFTablesDataset(os.path.join(args.data_root_dir, "val"),
                                        get_transform(args.data_type, "val"),
                                        do_crop=False,
+                                       include_eval=False,
                                        make_coco=True,
                                        image_extension=".jpg",
                                        xml_fileset="val_filelist.txt",
@@ -194,6 +196,7 @@ def get_data(args):
                                         get_transform(args.data_type, "val"),
                                         do_crop=False,
                                         make_coco=True,
+                                        include_eval=True,
                                         image_extension=".jpg",
                                         xml_fileset="test_filelist.txt",
                                         class_map=class_map)
@@ -362,7 +365,7 @@ def main():
         train(args, model, criterion, postprocessors, device)
     elif args.mode == "eval":
         data_loader_test, dataset_test = get_data(args)
-        eval_coco(model, criterion, postprocessors, data_loader_test, dataset_test, device)
+        eval_coco(args, model, criterion, postprocessors, data_loader_test, dataset_test, device)
     elif args.mode == "grits" or args.mode == 'grits-all':
         assert args.data_type == "structure", "GriTS is only applicable to structure recognition"
         dataset_test = get_data(args)

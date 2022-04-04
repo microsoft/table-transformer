@@ -460,41 +460,26 @@ def print_metrics_summary(metrics_summary):
         print('-' * 50)
 
 
-def eval_tsr_sample(idx, table_words_dir, mode, model, dataset_test, device):
-    #---Read source data: image, objects, and word bounding boxes
-    img, gt, orig_img, img_path = dataset_test[idx]
-    img_filename = img_path.split("/")[-1]
-    img_words_filepath = os.path.join(table_words_dir, img_filename.replace(".jpg", "_words.json"))
+def eval_tsr_sample(target, pred_logits, pred_bboxes, mode):
+    true_img_size = list(reversed(target['orig_size'].tolist()))
+    true_bboxes = target['boxes']
+    true_bboxes = [elem.tolist() for elem in rescale_bboxes(true_bboxes, true_img_size)]
+    true_labels = target['labels'].tolist()
+    true_scores = [1 for elem in true_labels]
+    img_words_filepath = target["img_words_path"]
     with open(img_words_filepath, 'r') as f:
-        page_tokens = json.load(f)
-    img_test = img
-    scale = 1000 / max(orig_img.size)
-    img = normalize(img)
-    for word in page_tokens:
-        word['bbox'] = [elem * scale for elem in word['bbox']]
+        true_page_tokens = json.load(f)
 
-    #---Compute ground truth features
-    true_bboxes = [list(elem) for elem in gt['boxes'].cpu().numpy()]
-    true_labels = gt['labels'].cpu().numpy()
-    true_scores = [1 for elem in true_bboxes]
     true_table_structures, true_cells, _ = objects_to_cells(true_bboxes, true_labels, true_scores,
-                                                            page_tokens, structure_class_names,
+                                                            true_page_tokens, structure_class_names,
                                                             structure_class_thresholds, structure_class_map)
 
-    #---Compute predicted features
-    # Propagate through the model
-    with torch.no_grad():
-        outputs = model([img.to(device)])
-    boxes = outputs['pred_boxes']
-    m = outputs['pred_logits'].softmax(-1).max(-1)
-    scores = m.values
-    labels = m.indices
-    rescaled_bboxes = rescale_bboxes(boxes[0].cpu(), img_test.size)
-    pred_bboxes = [bbox.tolist() for bbox in rescaled_bboxes]
-    pred_labels = labels[0].tolist()
-    pred_scores = scores[0].tolist()
+    m = pred_logits.softmax(-1).max(-1)
+    pred_labels = list(m.indices.detach().cpu().numpy())
+    pred_scores = list(m.values.detach().cpu().numpy())
+    pred_bboxes = [elem.tolist() for elem in rescale_bboxes(pred_bboxes, true_img_size)]
     _, pred_cells, _ = objects_to_cells(pred_bboxes, pred_labels, pred_scores,
-                                        page_tokens, structure_class_names,
+                                        true_page_tokens, structure_class_names,
                                         structure_class_thresholds, structure_class_map)
 
     metrics = compute_metrics(mode, true_bboxes, true_labels, true_scores, true_cells,
@@ -502,7 +487,7 @@ def eval_tsr_sample(idx, table_words_dir, mode, model, dataset_test, device):
     statistics = compute_statistics(true_table_structures, true_cells)
 
     metrics.update(statistics)
-    metrics['id'] = img_path.split('/')[-1].split('.')[0]
+    metrics['id'] = target["img_path"].split('/')[-1].split('.')[0]
 
     return metrics
 
@@ -545,7 +530,8 @@ def eval_tsr(args, model, dataset_test, device):
 
 
 @torch.no_grad()
-def evaluate(model, criterion, postprocessors, data_loader, base_ds, device):
+def evaluate(args, model, criterion, postprocessors, data_loader, base_ds, device):
+    st_time = datetime.now()
     model.eval()
     criterion.eval()
 
@@ -555,12 +541,24 @@ def evaluate(model, criterion, postprocessors, data_loader, base_ds, device):
 
     iou_types = tuple(k for k in ('segm', 'bbox') if k in postprocessors.keys())
     coco_evaluator = CocoEvaluator(base_ds, iou_types)
+    tsr_metrics = []
+
+    pred_logits_collection = []
+    pred_bboxes_collection = []
+    targets_collection = []
+    num_batches = len(data_loader)
+    batch_num = 0
 
     for samples, targets in metric_logger.log_every(data_loader, 1000, header):
+        batch_num += 1
         samples = samples.to(device)
-        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+        for t in targets:
+            for k, v in t.items():
+                if not k == 'img_path':
+                    t[k] = v.to(device)
 
         outputs = model(samples)
+
         loss_dict = criterion(outputs, targets)
         weight_dict = criterion.weight_dict
 
@@ -581,6 +579,29 @@ def evaluate(model, criterion, postprocessors, data_loader, base_ds, device):
         if coco_evaluator is not None:
             coco_evaluator.update(res)
 
+        pred_logits_collection += list(outputs['pred_logits'].detach().cpu())
+        pred_bboxes_collection += list(outputs['pred_boxes'].detach().cpu())
+
+        for target in targets:
+            for k, v in target.items():
+                if not k == 'img_path':
+                    target[k] = v.cpu()
+            img_filepath = target["img_path"]
+            img_filename = img_filepath.split("/")[-1]
+            img_words_filepath = os.path.join(args.table_words_dir, img_filename.replace(".jpg", "_words.json"))
+            target["img_words_path"] = img_words_filepath
+        targets_collection += targets
+
+        if batch_num % 5 == 0 or batch_num == num_batches:
+            arguments = zip(targets_collection, pred_logits_collection, pred_bboxes_collection,
+                            repeat(args.mode))
+            with multiprocessing.Pool(4) as pool:
+                metrics = pool.starmap_async(eval_tsr_sample, arguments).get()
+            tsr_metrics += metrics
+            pred_logits_collection = []
+            pred_bboxes_collection = []
+            targets_collection = []
+
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
@@ -596,15 +617,23 @@ def evaluate(model, criterion, postprocessors, data_loader, base_ds, device):
         if 'bbox' in postprocessors.keys():
             stats['coco_eval_bbox'] = coco_evaluator.coco_eval['bbox'].stats.tolist()
 
+    # Compute metrics averaged over all samples
+    metrics_summary = compute_metrics_summary(tsr_metrics, args.mode)
+
+    # Print summary of metrics
+    print_metrics_summary(metrics_summary)
+
+    print("Total time taken for {} samples: {}".format(len(base_ds), datetime.now() - st_time))
+
     return stats, coco_evaluator
 
 
-def eval_coco(model, criterion, postprocessors, data_loader_test, dataset_test, device):
+def eval_coco(args, model, criterion, postprocessors, data_loader_test, dataset_test, device):
     """
     Use this function to do COCO evaluation. Default implementation runs it on
     the test set.
     """
-    pubmed_stats, coco_evaluator = evaluate(model, criterion, postprocessors,
+    pubmed_stats, coco_evaluator = evaluate(args, model, criterion, postprocessors,
                                             data_loader_test, dataset_test,
                                             device)
     print("pubmed: AP50: {:.3f}, AP75: {:.3f}, AP: {:.3f}, AR: {:.3f}".format(
