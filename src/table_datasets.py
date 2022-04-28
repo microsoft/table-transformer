@@ -316,6 +316,7 @@ class PDFTablesDataset(torch.utils.data.Dataset):
         
         self.page_ids = sorted(xml_page_ids.intersection(png_page_ids))
         if not max_size is None:
+            random.shuffle(self.page_ids)
             self.page_ids = self.page_ids[:max_size]
         num_page_ids = len(self.page_ids)
         self.types = [1 for idx in range(num_page_ids)]
