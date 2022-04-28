@@ -56,6 +56,9 @@ def get_args():
     parser.add_argument('--checkpoint_freq', default=1, type=int)
     parser.add_argument('--batch_size', default=2, type=int)
     parser.add_argument('--num_workers', default=2, type=int)
+    parser.add_argument('--train_max_size', type=int)
+    parser.add_argument('--val_max_size', type=int)
+    parser.add_argument('--test_max_size', type=int)
 
     return parser.parse_args()
 
@@ -154,6 +157,7 @@ def get_data(args):
             os.path.join(args.data_root_dir, "train"),
             get_transform(args.data_type, "train"),
             do_crop=False,
+            max_size=args.train_max_size,
             include_eval=False,
             max_neg=0,
             make_coco=False,
@@ -163,6 +167,7 @@ def get_data(args):
         dataset_val = PDFTablesDataset(os.path.join(args.data_root_dir, "val"),
                                        get_transform(args.data_type, "val"),
                                        do_crop=False,
+                                       max_size=args.val_max_size,
                                        include_eval=False,
                                        make_coco=True,
                                        image_extension=".jpg",
@@ -195,6 +200,7 @@ def get_data(args):
                                                      "test"),
                                         get_transform(args.data_type, "val"),
                                         do_crop=False,
+                                        max_size=args.test_max_size,
                                         make_coco=True,
                                         include_eval=True,
                                         image_extension=".jpg",
@@ -215,6 +221,7 @@ def get_data(args):
                                                      "test"),
                                         RandomMaxResize(1000, 1000),
                                         include_original=True,
+                                        max_size=args.max_test_size,
                                         make_coco=False,
                                         image_extension=".jpg",
                                         xml_fileset="test_filelist.txt",
