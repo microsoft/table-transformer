@@ -64,47 +64,11 @@ def get_args():
     return parser.parse_args()
 
 
-def make_structure_transforms(image_set):
-    """
-    returns the appropriate transforms for structure recognition.
-    """
-
-    if image_set == 'train':
-        return R.Compose([
-            TD.RandomCrop(1, 10, 10, 10, 10),
-            TD.RandomMaxResize(900, 1100), TD.random_erasing, TD.normalize
-        ])
-
-    if image_set == 'val':
-        return R.Compose([TD.RandomMaxResize(1000, 1000), TD.normalize])
-
-    raise ValueError(f'unknown {image_set}')
-
-
-def make_detection_transforms(image_set):
-    """
-    returns the appropriate transforms for table detection.
-    """
-
-    if image_set == 'train':
-        return R.Compose([
-            R.RandomSelect(TD.TightAnnotationCrop([0, 1], 100, 150, 100, 150),
-                           TD.RandomPercentageCrop(1, 0.1, 0.1, 0.1, 0.1),
-                           p=0.2),
-            TD.RandomMaxResize(704, 896), TD.normalize
-        ])
-
-    if image_set == 'val':
-        return R.Compose([TD.RandomMaxResize(800, 800), TD.normalize])
-
-    raise ValueError(f'unknown {image_set}')
-
-
 def get_transform(data_type, image_set):
     if data_type == 'structure':
-        return make_structure_transforms(image_set)
+        return TD.get_structure_transform(image_set)
     else:
-        return make_detection_transforms(image_set)
+        return TD.get_detection_transform(image_set)
 
 
 def get_class_map(data_type):

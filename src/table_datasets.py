@@ -457,6 +457,42 @@ random_erasing = R.Compose([
 ])
 
 
+def get_structure_transform(image_set):
+    """
+    returns the appropriate transforms for structure recognition.
+    """
+
+    if image_set == 'train':
+        return R.Compose([
+            RandomCrop(1, 10, 10, 10, 10),
+            RandomMaxResize(900, 1100), random_erasing, normalize
+        ])
+
+    if image_set == 'val':
+        return R.Compose([RandomMaxResize(1000, 1000), normalize])
+
+    raise ValueError(f'unknown {image_set}')
+
+
+def get_detection_transform(image_set):
+    """
+    returns the appropriate transforms for table detection.
+    """
+
+    if image_set == 'train':
+        return R.Compose([
+            R.RandomSelect(TightAnnotationCrop([0, 1], 100, 150, 100, 150),
+                           RandomPercentageCrop(1, 0.1, 0.1, 0.1, 0.1),
+                           p=0.2),
+            RandomMaxResize(704, 896), normalize
+        ])
+
+    if image_set == 'val':
+        return R.Compose([RandomMaxResize(800, 800), normalize])
+
+    raise ValueError(f'unknown {image_set}')
+
+
 def _isArrayLike(obj):
     return hasattr(obj, '__iter__') and hasattr(obj, '__len__')
 
