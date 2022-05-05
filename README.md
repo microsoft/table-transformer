@@ -21,6 +21,7 @@ It contains:
 Additionally, cells in the headers are *canonicalized* and we implement multiple *quality control* steps to ensure the annotations are as free of noise as possible. For more details, please see [our paper](https://arxiv.org/pdf/2110.00061.pdf).
 
 ## News
+`05/05/2022`: We have released the pre-trained weights for the table structure recognition model trained on PubTables-1M.\
 `03/23/2022`: Our paper "GriTS: Grid table similarity metric for table structure recognition" is now available on [arXiv](https://arxiv.org/pdf/2203.12555.pdf)\
 `03/04/2022`: We have released the pre-trained weights for the table detection model trained on PubTables-1M.\
 `03/03/2022`: "PubTables-1M: Towards comprehensive table extraction from unstructured documents" has been accepted at [CVPR 2022](https://cvpr2022.thecvf.com/).\
@@ -29,12 +30,12 @@ Additionally, cells in the headers are *canonicalized* and we implement multiple
 `06/08/2021`: Initial version of the table-transformer project is released.
 
 ## Model Weights
-We provide the pre-trained model for table detection trained for 20 epochs on PubTables-1M.
+We provide the pre-trained models for table detection and table structure recognition trained for 20 epochs on PubTables-1M.
 
+<b>Table Detection:</b>
 <table>
   <thead>
     <tr style="text-align: right;">
-      <th>Task</th>
       <th>Model</th>
       <th>Schedule</th>
       <th>AP50</th>
@@ -47,7 +48,6 @@ We provide the pre-trained model for table detection trained for 20 epochs on Pu
   </thead>
   <tbody>
     <tr style="text-align: right;">
-      <td>Table Detection</td>
       <td>DETR R18</td>
       <td>20 Epochs</td>
       <td>0.995</td>
@@ -55,6 +55,42 @@ We provide the pre-trained model for table detection trained for 20 epochs on Pu
       <td>0.970</td>
       <td>0.985</td>
       <td><a href="https://pubtables1m.blob.core.windows.net/model/pubtables1m_detection_detr_r18.pth">Weights</a></td>
+      <td>110 MB</td>
+    </tr>
+  </tbody>
+</table>
+
+<b>Table Structure Recognition:</b>
+<table>
+  <thead>
+    <tr style="text-align: right;">
+      <th>Model</th>
+      <th>Schedule</th>
+      <th>AP50</th>
+      <th>AP75</th>
+      <th>AP</th>
+      <th>AR</th>
+      <th>GriTS<sub>Top</sub></th>
+      <th>GriTS<sub>Con</sub></th>
+      <th>GriTS<sub>Loc</sub></th>
+      <th>Acc<sub>Con</sub></th>
+      <th>File</th>
+      <th>Size</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="text-align: right;">
+      <td>DETR R18</td>
+      <td>20 Epochs</td>
+      <td>0.970</td>
+      <td>0.941</td>
+      <td>0.902</td>
+      <td>0.935</td>
+      <td>0.9849</td>
+      <td>0.9850</td>
+      <td>0.9786</td>
+      <td>0.8243</td>
+      <td><a href="https://pubtables1m.blob.core.windows.net/model/pubtables1m_structure_detr_r18.pth">Weights</a></td>
       <td>110 MB</td>
     </tr>
   </tbody>
