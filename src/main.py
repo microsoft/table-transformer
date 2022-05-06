@@ -60,6 +60,8 @@ def get_args():
     parser.add_argument('--train_max_size', type=int)
     parser.add_argument('--val_max_size', type=int)
     parser.add_argument('--test_max_size', type=int)
+    parser.add_argument('--eval_pool_size', type=int, default=1)
+    parser.add_argument('--eval_step', type=int, default=1)
 
     return parser.parse_args()
 

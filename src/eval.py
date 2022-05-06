@@ -11,6 +11,7 @@ import multiprocessing
 from itertools import repeat
 from functools import partial
 import tqdm
+import math
 
 import torch
 from torchvision import transforms
@@ -547,9 +548,10 @@ def evaluate(args, model, criterion, postprocessors, data_loader, base_ds, devic
     pred_bboxes_collection = []
     targets_collection = []
     num_batches = len(data_loader)
+    print_every = max(args.eval_step, int(math.ceil(num_batches / 100)))
     batch_num = 0
 
-    for samples, targets in metric_logger.log_every(data_loader, 1000, header):
+    for samples, targets in metric_logger.log_every(data_loader, print_every, header):
         batch_num += 1
         samples = samples.to(device)
         for t in targets:
@@ -592,10 +594,10 @@ def evaluate(args, model, criterion, postprocessors, data_loader, base_ds, devic
             target["img_words_path"] = img_words_filepath
         targets_collection += targets
 
-        if batch_num % 5 == 0 or batch_num == num_batches:
+        if batch_num % args.eval_step == 0 or batch_num == num_batches:
             arguments = zip(targets_collection, pred_logits_collection, pred_bboxes_collection,
                             repeat(args.mode))
-            with multiprocessing.Pool(4) as pool:
+            with multiprocessing.Pool(args.eval_pool_size) as pool:
                 metrics = pool.starmap_async(eval_tsr_sample, arguments).get()
             tsr_metrics += metrics
             pred_logits_collection = []
