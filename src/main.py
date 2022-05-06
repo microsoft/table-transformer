@@ -84,7 +84,7 @@ def make_structure_coco_transforms(image_set):
 
     if image_set == 'train':
         return R.Compose([
-            RandomCrop(1, 10, 10, 10, 10),
+            RandomCrop(1, 20, 20, 20, 20),
             RandomMaxResize(900, 1100), random_erasing, normalize
         ])
 
