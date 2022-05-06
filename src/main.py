@@ -66,6 +66,66 @@ def get_args():
     return parser.parse_args()
 
 
+<<<<<<< HEAD
+=======
+def make_structure_coco_transforms(image_set):
+    """
+    returns the appropriate transforms for structure recognition.
+    """
+    normalize = R.Compose([
+        R.ToTensor(),
+        R.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
+
+    random_erasing = R.Compose([
+        R.ToTensor(),
+        RandomErasingWithTarget(p=0.5,
+                                scale=(0.003, 0.03),
+                                ratio=(0.1, 0.3),
+                                value='random'),
+        RandomErasingWithTarget(p=0.5,
+                                scale=(0.003, 0.03),
+                                ratio=(0.3, 1),
+                                value='random'),
+        ToPILImageWithTarget()
+    ])
+
+    if image_set == 'train':
+        return R.Compose([
+            RandomCrop(1, 20, 20, 20, 20),
+            RandomMaxResize(900, 1100), random_erasing, normalize
+        ])
+
+    if image_set == 'val':
+        return R.Compose([RandomMaxResize(1000, 1000), normalize])
+
+    raise ValueError(f'unknown {image_set}')
+
+
+def make_detection_coco_transforms(image_set):
+    """
+    returns the appropriate transforms for table detection.
+    """
+    normalize = R.Compose([
+        R.ToTensor(),
+        R.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
+
+    if image_set == 'train':
+        return R.Compose([
+            R.RandomSelect(TightAnnotationCrop([0, 1], 100, 150, 100, 150),
+                           RandomPercentageCrop(1, 0.1, 0.1, 0.1, 0.1),
+                           p=0.2),
+            RandomMaxResize(704, 896), normalize
+        ])
+
+    if image_set == 'val':
+        return R.Compose([RandomMaxResize(800, 800), normalize])
+
+    raise ValueError(f'unknown {image_set}')
+
+
+>>>>>>> main
 def get_transform(data_type, image_set):
     if data_type == 'structure':
         return TD.get_structure_transform(image_set)
