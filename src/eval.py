@@ -438,7 +438,16 @@ def compute_metrics_summary(sample_metrics, mode):
     return metrics_summary
 
 
-def print_metrics_summary(metrics_summary):
+def print_metrics_line(name, metrics_dict, key, min_length=18):
+    if len(name) < min_length:
+        name = ' '*(min_length-len(name)) + name
+    try:
+        print("{}: {:.4f}".format(name, metrics_dict[key]))
+    except:
+        print("{}: --".format(name))
+
+
+def print_metrics_summary(metrics_summary, all=False):
     """
     Print a formatted summary of the table structure recognition metrics
     averaged over all samples.
@@ -448,16 +457,14 @@ def print_metrics_summary(metrics_summary):
     for table_type in ['simple', 'complex', 'all']:
         metrics = metrics_summary[table_type]
         print("Results on {} tables ({} total):".format(table_type, metrics['num_tables']))
-        print("      Accuracy_Con: {:.4f}".format(metrics['acc_con']))
-        print("         GriTS_Top: {:.4f}".format(metrics['grits_top']))
-        print("         GriTS_Con: {:.4f}".format(metrics['grits_con']))
-        print("         GriTS_Loc: {:.4f}".format(metrics['grits_loc']))
-        if 'grits_rawloc' in metrics:
-            print("      GriTS_RawLoc: {:.4f}".format(metrics['grits_rawloc']))
-        if 'dar_con_original' in metrics:
-            print("DAR_Con (original): {:.4f}".format(metrics['dar_con_original']))
-        if 'dar_con' in metrics:
-            print("           DAR_Con: {:.4f}".format(metrics['dar_con']))
+        print_metrics_line("Accuracy_Con", metrics, 'acc_con')
+        print_metrics_line("GriTS_Top", metrics, 'grits_top')
+        print_metrics_line("GriTS_Con", metrics, 'grits_con')
+        print_metrics_line("GriTS_Loc", metrics, 'grits_loc')
+        if all:
+            print_metrics_line("GriTS_RawLoc", metrics, 'grits_rawloc')
+            print_metrics_line("DAR_Con (original)", metrics, 'dar_con_original')
+            print_metrics_line("DAR_Con", metrics, 'dar_con')
         print('-' * 50)
 
 
@@ -542,11 +549,13 @@ def evaluate(args, model, criterion, postprocessors, data_loader, base_ds, devic
 
     iou_types = tuple(k for k in ('segm', 'bbox') if k in postprocessors.keys())
     coco_evaluator = CocoEvaluator(base_ds, iou_types)
-    tsr_metrics = []
 
-    pred_logits_collection = []
-    pred_bboxes_collection = []
-    targets_collection = []
+    if args.data_type == "structure":
+        tsr_metrics = []
+        pred_logits_collection = []
+        pred_bboxes_collection = []
+        targets_collection = []
+        
     num_batches = len(data_loader)
     print_every = max(args.eval_step, int(math.ceil(num_batches / 100)))
     batch_num = 0
@@ -581,28 +590,29 @@ def evaluate(args, model, criterion, postprocessors, data_loader, base_ds, devic
         if coco_evaluator is not None:
             coco_evaluator.update(res)
 
-        pred_logits_collection += list(outputs['pred_logits'].detach().cpu())
-        pred_bboxes_collection += list(outputs['pred_boxes'].detach().cpu())
+        if args.data_type == "structure":
+            pred_logits_collection += list(outputs['pred_logits'].detach().cpu())
+            pred_bboxes_collection += list(outputs['pred_boxes'].detach().cpu())
 
-        for target in targets:
-            for k, v in target.items():
-                if not k == 'img_path':
-                    target[k] = v.cpu()
-            img_filepath = target["img_path"]
-            img_filename = img_filepath.split("/")[-1]
-            img_words_filepath = os.path.join(args.table_words_dir, img_filename.replace(".jpg", "_words.json"))
-            target["img_words_path"] = img_words_filepath
-        targets_collection += targets
+            for target in targets:
+                for k, v in target.items():
+                    if not k == 'img_path':
+                        target[k] = v.cpu()
+                img_filepath = target["img_path"]
+                img_filename = img_filepath.split("/")[-1]
+                img_words_filepath = os.path.join(args.table_words_dir, img_filename.replace(".jpg", "_words.json"))
+                target["img_words_path"] = img_words_filepath
+            targets_collection += targets
 
-        if batch_num % args.eval_step == 0 or batch_num == num_batches:
-            arguments = zip(targets_collection, pred_logits_collection, pred_bboxes_collection,
-                            repeat(args.mode))
-            with multiprocessing.Pool(args.eval_pool_size) as pool:
-                metrics = pool.starmap_async(eval_tsr_sample, arguments).get()
-            tsr_metrics += metrics
-            pred_logits_collection = []
-            pred_bboxes_collection = []
-            targets_collection = []
+            if batch_num % args.eval_step == 0 or batch_num == num_batches:
+                arguments = zip(targets_collection, pred_logits_collection, pred_bboxes_collection,
+                                repeat(args.mode))
+                with multiprocessing.Pool(args.eval_pool_size) as pool:
+                    metrics = pool.starmap_async(eval_tsr_sample, arguments).get()
+                tsr_metrics += metrics
+                pred_logits_collection = []
+                pred_bboxes_collection = []
+                targets_collection = []
 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
@@ -619,11 +629,12 @@ def evaluate(args, model, criterion, postprocessors, data_loader, base_ds, devic
         if 'bbox' in postprocessors.keys():
             stats['coco_eval_bbox'] = coco_evaluator.coco_eval['bbox'].stats.tolist()
 
-    # Compute metrics averaged over all samples
-    metrics_summary = compute_metrics_summary(tsr_metrics, args.mode)
+    if args.data_type == "structure":
+        # Compute metrics averaged over all samples
+        metrics_summary = compute_metrics_summary(tsr_metrics, args.mode)
 
-    # Print summary of metrics
-    print_metrics_summary(metrics_summary)
+        # Print summary of metrics
+        print_metrics_summary(metrics_summary)
 
     print("Total time taken for {} samples: {}".format(len(base_ds), datetime.now() - st_time))
 
