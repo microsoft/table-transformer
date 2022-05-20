@@ -640,7 +640,3 @@ def eval_coco(args, model, criterion, postprocessors, data_loader_test, dataset_
     print("pubmed: AP50: {:.3f}, AP75: {:.3f}, AP: {:.3f}, AR: {:.3f}".format(
         pubmed_stats['coco_eval_bbox'][1], pubmed_stats['coco_eval_bbox'][2],
         pubmed_stats['coco_eval_bbox'][0], pubmed_stats['coco_eval_bbox'][8]))
-
-
-if __name__ == "__main__":
-    main()
