@@ -19,6 +19,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from fitz import Rect
+from PIL import Image
 
 sys.path.append("../detr")
 import util.misc as utils
@@ -525,6 +526,53 @@ def eval_tsr(args, model, dataset_test, device):
     print_metrics_summary(metrics_summary)
 
 
+def visualize(args, target, pred_logits, pred_bboxes):
+    img_filepath = target["img_path"]
+    img_filename = img_filepath.split("/")[-1]
+    img_words_filepath = os.path.join(args.table_words_dir, img_filename.replace(".jpg", "_words.json"))
+    out_filename = img_filename.replace(".jpg", "_cells.jpg")
+    out_filepath = out_filename
+    print(img_words_filepath)
+
+    table_img = Image.open(img_filepath)
+
+    true_img_size = list(reversed(target['orig_size'].tolist()))
+    with open(img_words_filepath, 'r') as f:
+        true_page_tokens = json.load(f)
+
+    m = pred_logits.softmax(-1).max(-1)
+    pred_labels = list(m.indices.detach().cpu().numpy())
+    pred_scores = list(m.values.detach().cpu().numpy())
+    pred_bboxes = pred_bboxes.detach().cpu()
+    pred_bboxes = [elem.tolist() for elem in rescale_bboxes(pred_bboxes, true_img_size)]
+    _, pred_cells, _ = objects_to_cells(pred_bboxes, pred_labels, pred_scores,
+                                        true_page_tokens, structure_class_names,
+                                        structure_class_thresholds, structure_class_map)
+
+    fig,ax = plt.subplots(1)
+    ax.imshow(table_img, interpolation='lanczos')
+
+    for cell in pred_cells:
+        bbox = cell['bbox']
+        if cell['header']:
+            alpha = 0.4
+        else:
+            alpha = 0.15
+        rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
+                                    edgecolor='none',facecolor="magenta", alpha=alpha)
+        ax.add_patch(rect)
+        rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
+                                    edgecolor="magenta",facecolor='none',linestyle="--")
+        ax.add_patch(rect) 
+
+    fig.set_size_inches((15, 18))
+    plt.savefig(out_filepath)
+
+    plt.close()
+    del fig
+    del ax
+
+
 @torch.no_grad()
 def evaluate(args, model, criterion, postprocessors, data_loader, base_ds, device):
     st_time = datetime.now()
@@ -557,6 +605,10 @@ def evaluate(args, model, criterion, postprocessors, data_loader, base_ds, devic
                     t[k] = v.to(device)
 
         outputs = model(samples)
+
+        if args.debug:
+            for target, pred_logits, pred_boxes in zip(targets, outputs['pred_logits'], outputs['pred_boxes']):
+                visualize(args, target, pred_logits, pred_boxes)
 
         loss_dict = criterion(outputs, targets)
         weight_dict = criterion.weight_dict
