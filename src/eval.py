@@ -535,18 +535,18 @@ def visualize(args, target, pred_logits, pred_bboxes):
     print(img_words_filepath)
 
     table_img = Image.open(img_filepath)
+    img_size = table_img.size
 
-    true_img_size = list(reversed(target['orig_size'].tolist()))
     with open(img_words_filepath, 'r') as f:
-        true_page_tokens = json.load(f)
+        tokens = json.load(f)
 
     m = pred_logits.softmax(-1).max(-1)
     pred_labels = list(m.indices.detach().cpu().numpy())
     pred_scores = list(m.values.detach().cpu().numpy())
     pred_bboxes = pred_bboxes.detach().cpu()
-    pred_bboxes = [elem.tolist() for elem in rescale_bboxes(pred_bboxes, true_img_size)]
+    pred_bboxes = [elem.tolist() for elem in rescale_bboxes(pred_bboxes, img_size)]
     _, pred_cells, _ = objects_to_cells(pred_bboxes, pred_labels, pred_scores,
-                                        true_page_tokens, structure_class_names,
+                                        tokens, structure_class_names,
                                         structure_class_thresholds, structure_class_map)
 
     fig,ax = plt.subplots(1)
