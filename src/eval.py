@@ -394,18 +394,6 @@ def get_bbox_decorations(label, score):
     return color, alpha, linewidth
 
 
-def plot_graph(metric_1, metric_2, metric_1_name, metric_2_name):
-    plt.scatter(metric_1, metric_2, s=40, c='red', marker='o')
-    plt.title(metric_1_name + " vs. " + metric_2_name)
-    plt.xlim([0.5, 1])
-    plt.ylim([0.5, 1])
-    plt.plot([0, 1], [0, 1])
-    plt.xlabel(metric_1_name)
-    plt.ylabel(metric_2_name)
-    plt.gcf().set_size_inches((8, 8))
-    plt.show()
-
-
 def compute_metrics_summary(sample_metrics, mode):
     """
     Print a formatted summary of the table structure recognition metrics
