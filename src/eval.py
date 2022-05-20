@@ -531,7 +531,7 @@ def visualize(args, target, pred_logits, pred_bboxes):
     img_filename = img_filepath.split("/")[-1]
     img_words_filepath = os.path.join(args.table_words_dir, img_filename.replace(".jpg", "_words.json"))
     out_filename = img_filename.replace(".jpg", "_cells.jpg")
-    out_filepath = out_filename
+    out_filepath = os.path.join(args.debug_save_dir, out_filename)
     print(img_words_filepath)
 
     table_img = Image.open(img_filepath)

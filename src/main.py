@@ -43,6 +43,9 @@ def get_args():
     parser.add_argument('--metrics_save_filepath',
                         help='Filepath to save grits outputs',
                         default='')
+    parser.add_argument('--debug_save_dir',
+                        help='Filepath to save visualizations',
+                        default='debug')                        
     parser.add_argument('--table_words_dir',
                         help="Folder containg the bboxes of table words")
     parser.add_argument('--mode',
@@ -303,6 +306,10 @@ def main():
     args = type('Args', (object,), config_args)
     print(args.__dict__)
     print('-' * 100)
+
+    # Check for debug mode
+    if args.debug:
+        os.makedirs(args.debug_save_dir, exist_ok=True)
 
     # fix the seed for reproducibility
     seed = args.seed + utils.get_rank()
