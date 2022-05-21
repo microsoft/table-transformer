@@ -308,8 +308,8 @@ def main():
     print('-' * 100)
 
     # Check for debug mode
-    if args.debug:
-        print("Running in DEBUG mode, processing will take longer. Saving output to: {}.".format(args.debug_save_dir))
+    if args.mode == 'eval' and args.debug:
+        print("Running evaluation/inference in DEBUG mode, processing will take longer. Saving output to: {}.".format(args.debug_save_dir))
         os.makedirs(args.debug_save_dir, exist_ok=True)
 
     # fix the seed for reproducibility
