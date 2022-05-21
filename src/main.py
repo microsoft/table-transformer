@@ -309,6 +309,7 @@ def main():
 
     # Check for debug mode
     if args.debug:
+        print("Running in DEBUG mode, processing will take longer. Saving output to: {}.".format(args.debug_save_dir))
         os.makedirs(args.debug_save_dir, exist_ok=True)
 
     # fix the seed for reproducibility

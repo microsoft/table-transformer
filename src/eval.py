@@ -371,28 +371,21 @@ def rescale_bboxes(out_bbox, size):
     return b
 
 
-def get_bbox_decorations(label, score):
-    colors = [
-        'brown', 'red', 'blue', 'magenta', 'cyan', 'green', 'orange', 'green',
-        'orange', 'yellow', 'brown', 'red', 'blue', 'magenta', 'cyan', 'green',
-        'orange', 'green', 'orange', 'yellow'
-    ]
-    if label == 0 or label == 8:
-        alpha = 0
-        linewidth = 3
+def get_bbox_decorations(label):
+    if label == 0:
+        return 'brown', 0, 3, None
+    elif label == 1:
+        return 'red', 0.15, 2, None
+    elif label == 2:
+        return 'blue', 0.15, 2, None
     elif label == 3:
-        alpha = score / 3
-        linewidth = 3
-    elif label == 4 or label == 5:
-        alpha = score / 3
-        linewidth = 4
-    else:
-        alpha = score / 9
-        linewidth = 2
-
-    color = colors[label]
-
-    return color, alpha, linewidth
+        return 'magenta', 0.2, 3, '//'
+    elif label == 4:
+        return 'cyan', 0.2, 4, '//'
+    elif label == 5:
+        return 'green', 0.2, 4, '\\\\'
+    
+    return 'gray', 0, 0, None
 
 
 def compute_metrics_summary(sample_metrics, mode):
@@ -530,9 +523,10 @@ def visualize(args, target, pred_logits, pred_bboxes):
     img_filepath = target["img_path"]
     img_filename = img_filepath.split("/")[-1]
     img_words_filepath = os.path.join(args.table_words_dir, img_filename.replace(".jpg", "_words.json"))
-    out_filename = img_filename.replace(".jpg", "_cells.jpg")
-    out_filepath = os.path.join(args.debug_save_dir, out_filename)
-    print(img_words_filepath)
+    cells_out_filename = img_filename.replace(".jpg", "_cells.jpg")
+    cells_out_filepath = os.path.join(args.debug_save_dir, cells_out_filename)
+    bboxes_out_filename = img_filename.replace(".jpg", "_bboxes.jpg")
+    bboxes_out_filepath = os.path.join(args.debug_save_dir, bboxes_out_filename)
 
     table_img = Image.open(img_filepath)
     img_size = table_img.size
@@ -545,6 +539,35 @@ def visualize(args, target, pred_logits, pred_bboxes):
     pred_scores = list(m.values.detach().cpu().numpy())
     pred_bboxes = pred_bboxes.detach().cpu()
     pred_bboxes = [elem.tolist() for elem in rescale_bboxes(pred_bboxes, img_size)]
+
+    fig,ax = plt.subplots(1)
+    ax.imshow(table_img, interpolation='lanczos')
+
+    for bbox, label, score in zip(pred_bboxes, pred_labels, pred_scores):
+        if not label > 5 and score > 0.5:
+            color, alpha, linewidth, hatch = get_bbox_decorations(label)
+            # Fill
+            rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1],
+                                     linewidth=linewidth, alpha=alpha,
+                                     edgecolor='none',facecolor=color,
+                                     linestyle=None)
+            ax.add_patch(rect)
+            # Hatch
+            rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1],
+                                     linewidth=1, alpha=0.4,
+                                     edgecolor=color,facecolor='none',
+                                     linestyle='--',hatch=hatch)
+            ax.add_patch(rect)
+            # Edge
+            rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1],
+                                     linewidth=linewidth,
+                                     edgecolor=color,facecolor='none',
+                                     linestyle="--")
+            ax.add_patch(rect) 
+
+    fig.set_size_inches((15, 18))
+    plt.savefig(bboxes_out_filepath)
+
     _, pred_cells, _ = objects_to_cells(pred_bboxes, pred_labels, pred_scores,
                                         tokens, structure_class_names,
                                         structure_class_thresholds, structure_class_map)
@@ -555,22 +578,24 @@ def visualize(args, target, pred_logits, pred_bboxes):
     for cell in pred_cells:
         bbox = cell['bbox']
         if cell['header']:
-            alpha = 0.4
+            alpha = 0.3
         else:
-            alpha = 0.15
+            alpha = 0.125
         rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                    edgecolor='none',facecolor="magenta", alpha=alpha)
+                                 edgecolor='none',facecolor="magenta", alpha=alpha)
         ax.add_patch(rect)
         rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                    edgecolor="magenta",facecolor='none',linestyle="--")
+                                 edgecolor="magenta",facecolor='none',linestyle="--",
+                                 alpha=0.08, hatch='///')
+        ax.add_patch(rect)
+        rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
+                                 edgecolor="magenta",facecolor='none',linestyle="--")
         ax.add_patch(rect) 
 
     fig.set_size_inches((15, 18))
-    plt.savefig(out_filepath)
+    plt.savefig(cells_out_filepath, dpi=150)
 
-    plt.close()
-    del fig
-    del ax
+    plt.close('all')
 
 
 @torch.no_grad()
