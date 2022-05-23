@@ -416,21 +416,23 @@ def print_metrics_summary(metrics_summary):
     averaged over all samples.
     """
 
-    print('-' * 100)
-    for table_type in ['simple', 'complex', 'all']:
+    print("-" * 100)
+    for table_type in ["simple", "complex", "all"]:
         metrics = metrics_summary[table_type]
-        print("Results on {} tables ({} total):".format(table_type, metrics['num_tables']))
-        print("      Accuracy_Con: {:.4f}".format(metrics['acc_con']))
-        print("         GriTS_Top: {:.4f}".format(metrics['grits_top']))
-        print("         GriTS_Con: {:.4f}".format(metrics['grits_con']))
-        print("         GriTS_Loc: {:.4f}".format(metrics['grits_loc']))
-        if 'grits_rawloc' in metrics:
-            print("      GriTS_RawLoc: {:.4f}".format(metrics['grits_rawloc']))
-        if 'dar_con_original' in metrics:
-            print("DAR_Con (original): {:.4f}".format(metrics['dar_con_original']))
-        if 'dar_con' in metrics:
-            print("           DAR_Con: {:.4f}".format(metrics['dar_con']))
-        print('-' * 50)
+        print(f'Results on {table_type} tables ({metrics.get("num_tables", 0)} total):')
+        print("      Accuracy_Con: {:.4f}".format(metrics.get("acc_con", 0)))
+        print("         GriTS_Top: {:.4f}".format(metrics.get("grits_top", 0)))
+        print("         GriTS_Con: {:.4f}".format(metrics.get("grits_con", 0)))
+        print("         GriTS_Loc: {:.4f}".format(metrics.get("grits_loc", 0)))
+        if "grits_rawloc" in metrics:
+            print("      GriTS_RawLoc: {:.4f}".format(metrics.get("grits_rawloc", 0)))
+        if "dar_con_original" in metrics:
+            print(
+                "DAR_Con (original): {:.4f}".format(metrics.get("dar_con_original", 0))
+            )
+        if "dar_con" in metrics:
+            print("           DAR_Con: {:.4f}".format(metrics.get("dar_con", 0)))
+        print("-" * 50)
 
 
 def eval_tsr(args, model, dataset_test, device):
