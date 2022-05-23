@@ -351,24 +351,34 @@ def grits_top(true_relative_span_grid, pred_relative_span_grid):
     relative to the current grid cell location, in grid coordinate units.
     Note that for a non-spanning cell this will always be [0, 0, 1, 1].
     """
-    return factored_2dmss(true_relative_span_grid,
-                          pred_relative_span_grid,
-                          reward_function=iou)
+    try:
+        return factored_2dmss(true_relative_span_grid,
+                            pred_relative_span_grid,
+                            reward_function=iou)
+    except Exception as e:
+        return 0, 0, 0, 0
+
 
 
 def grits_loc(true_bbox_grid, pred_bbox_grid):
     """
     Compute GriTS_Loc given two matrices of cell bounding boxes.
     """
-    return factored_2dmss(true_bbox_grid,
-                          pred_bbox_grid,
-                          reward_function=iou)
+    try:
+        return factored_2dmss(true_bbox_grid,
+                            pred_bbox_grid,
+                            reward_function=iou)
+    except Exception as e:
+        return 0, 0, 0, 0
 
 
 def grits_con(true_text_grid, pred_text_grid):
     """
     Compute GriTS_Con given two matrices of cell text strings.
     """
-    return factored_2dmss(true_text_grid,
-                          pred_text_grid,
-                          reward_function=lcs_similarity)
+    try:
+        return factored_2dmss(true_text_grid,
+                            pred_text_grid,
+                            reward_function=lcs_similarity)
+    except Exception as e:
+        return 0, 0, 0, 0
