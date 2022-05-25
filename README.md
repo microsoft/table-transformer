@@ -175,13 +175,14 @@ To compute object detection and GriTS metrics for the structure recognition mode
 python main.py --mode eval --data_type structure --config_file structure_config.json --data_root_dir /path/to/pascal_voc_structure_data --model_load_path /path/to/structure_model --table_words_dir /path/to/json_table_words_data
 ```  
 
-Optionally you can add the following flags for controlling parallelization, saving detailed metrics, and saving visualizations:  
-```--batch_size 4```: Batch size to use during the forward pass of the model.\
-```--eval_pool_size 4```: The worker pool size for CPU parallelization during GriTS metric computation.\
-```--eval_step 2```: The number of batches of processed input data to accumulate before passing all samples to the parallelized worker pool for GriTS metric computation.\
+Optionally you can add flags for things like controlling parallelization, saving detailed metrics, and saving visualizations:\
+```--device cpu```: Change the default device from cuda to cpu.\
+```--batch_size 4```: Control the batch size to use during the forward pass of the model.\
+```--eval_pool_size 4```: Control the worker pool size for CPU parallelization during GriTS metric computation.\
+```--eval_step 2```: Control the number of batches of processed input data to accumulate before passing all samples to the parallelized worker pool for GriTS metric computation.\
 ```--debug```: Create and save visualizations of the model inference. For each input image "PMC1234567_table_0.jpg", this will save two visualizations: "PMC1234567_table_0_bboxes.jpg" containing the bounding boxes output by the model, and "PMC1234567_table_0_cells.jpg" containing the final table cell bounding boxes after post-processing. By default these are saved to a new folder "debug" in the current directory.\
 ``` --debug_save_dir /path/to/folder```: Specify the folder to save visualizations to.\
-```--test_max_size 500```: Run evaluation on a randomly sampled subset of the data. Useful for quick verifications and checks.\
+```--test_max_size 500```: Run evaluation on a randomly sampled subset of the data. Useful for quick verifications and checks.
 
 ## Citing
 Our work can be cited using:
