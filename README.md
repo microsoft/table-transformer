@@ -96,15 +96,26 @@ We provide the pre-trained models for table detection and table structure recogn
   </tbody>
 </table>
 
-## Getting the Data
+## Training and Evaluation Data
 [PubTables-1M](https://msropendata.com/datasets/505fcbe3-1383-42b1-913a-f651b8b712d3) is available for download from [Microsoft Research Open Data](https://msropendata.com/).
 
 It comes in 5 tar.gz files:
-- PubTables-1M-Image_Page_Detection_PASCAL_VOC.tar.gz
-- PubTables-1M-Image_Page_Words_JSON.tar.gz
-- PubTables-1M-Image_Table_Structure_PASCAL_VOC.tar.gz
-- PubTables-1M-Image_Table_Words_JSON.tar.gz
-- PubTables-1M-PDF_Annotations_JSON.tar.gz
+- PubTables-1M-Image_Page_Detection_PASCAL_VOC.tar.gz: Training and evaluation data for the detection model
+  - ```/images```: 575,305 JPG files; one file for each page image
+  - ```/train```: 460,589 XML files containing bounding boxes in PASCAL VOC format
+  - ```/test```: 57,125 XML files containing bounding boxes in PASCAL VOC format
+  - ```/val```: 57,591 XML files containing bounding boxes in PASCAL VOC format
+- PubTables-1M-Image_Page_Words_JSON.tar.gz: Bounding boxes and text content for all of the words in each cropped table image
+  - One JSON file per page image (plus some extra unused files)
+- PubTables-1M-Image_Table_Structure_PASCAL_VOC.tar.gz: Training and evaluation data for the structure (and functional analysis) model
+  - ```/images```: 947,642 JPG files; one file for each page image
+  - ```/train```: 758,849 XML files containing bounding boxes in PASCAL VOC format
+  - ```/test```: 93,834 XML files containing bounding boxes in PASCAL VOC format
+  - ```/val```: 94,959 XML files containing bounding boxes in PASCAL VOC format
+- PubTables-1M-Image_Table_Words_JSON.tar.gz: Bounding boxes and text content for all of the words in each cropped table image
+  - One JSON file per cropped table image (plus some extra unused files)
+- PubTables-1M-PDF_Annotations_JSON.tar.gz: Detailed annotations for all of the tables appearing in the source PubMed PDFs. All annotations are in PDF coordinates.
+  - 401,733 JSON files; one file per source PDF
 
 To download from the command line:
 1. Visit the [dataset home page](https://msropendata.com/datasets/505fcbe3-1383-42b1-913a-f651b8b712d3) with a web browser and click Download in the top left corner. This will create a link to download the dataset from Azure with a unique access token for you that looks like `https://msropendataset01.blob.core.windows.net/pubtables1m?[SAS_TOKEN_HERE]`.
