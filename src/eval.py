@@ -482,43 +482,6 @@ def eval_tsr_sample(target, pred_logits, pred_bboxes, mode):
     return metrics
 
 
-def eval_tsr(args, model, dataset_test, device):
-    """
-    Compute table structure recognition (TSR) metrics, including
-    grid table similarity (GriTS) and directed adjacency relations (DAR).
-    """
-
-    if args.debug:
-        max_samples = min(50, len(dataset_test))
-    else:
-        max_samples = len(dataset_test)
-    print("Evaluating {} samples...".format(max_samples))
-
-    model.eval()
-    all_metrics = []
-    st_time = datetime.now()
-
-    torch.multiprocessing.set_start_method('spawn')
-    with multiprocessing.Pool(2) as pool:
-        all_metrics = list(tqdm.tqdm(pool.imap_unordered(partial(eval_tsr_sample,
-                                                         table_words_dir=args.table_words_dir,
-                                                         mode=args.mode, model=model,
-                                                         dataset_test=dataset_test, device=device),
-                                     range(max_samples)), total=max_samples))
-
-    # Save sample-level metrics for more analysis
-    if len(args.metrics_save_filepath) > 0:
-        with open(args.metrics_save_filepath, 'w') as outfile:
-            json.dump(all_metrics, outfile)
-    print("Total time taken for {} samples: {}".format(max_samples, datetime.now() - st_time))
-
-    # Compute metrics averaged over all samples
-    metrics_summary = compute_metrics_summary(all_metrics, args.mode)
-
-    # Print summary of metrics
-    print_metrics_summary(metrics_summary)
-
-
 def visualize(args, target, pred_logits, pred_bboxes):
     img_filepath = target["img_path"]
     img_filename = img_filepath.split("/")[-1]
@@ -565,8 +528,9 @@ def visualize(args, target, pred_logits, pred_bboxes):
                                      linestyle="--")
             ax.add_patch(rect) 
 
-    fig.set_size_inches((15, 18))
-    plt.savefig(bboxes_out_filepath)
+    fig.set_size_inches((15, 15))
+    plt.axis('off')
+    plt.savefig(bboxes_out_filepath, bbox_inches='tight', dpi=100)
 
     _, pred_cells, _ = objects_to_cells(pred_bboxes, pred_labels, pred_scores,
                                         tokens, structure_class_names,
@@ -592,8 +556,9 @@ def visualize(args, target, pred_logits, pred_bboxes):
                                  edgecolor="magenta",facecolor='none',linestyle="--")
         ax.add_patch(rect) 
 
-    fig.set_size_inches((15, 18))
-    plt.savefig(cells_out_filepath, dpi=150)
+    fig.set_size_inches((15, 15))
+    plt.axis('off')
+    plt.savefig(cells_out_filepath, bbox_inches='tight', dpi=100)
 
     plt.close('all')
 
@@ -695,6 +660,11 @@ def evaluate(args, model, criterion, postprocessors, data_loader, base_ds, devic
             stats['coco_eval_bbox'] = coco_evaluator.coco_eval['bbox'].stats.tolist()
 
     if args.data_type == "structure":
+        # Save sample-level metrics for more analysis
+        if len(args.metrics_save_filepath) > 0:
+            with open(args.metrics_save_filepath, 'w') as outfile:
+                json.dump(tsr_metrics, outfile)
+
         # Compute metrics averaged over all samples
         metrics_summary = compute_metrics_summary(tsr_metrics, args.mode)
 
@@ -714,6 +684,6 @@ def eval_coco(args, model, criterion, postprocessors, data_loader_test, dataset_
     pubmed_stats, coco_evaluator = evaluate(args, model, criterion, postprocessors,
                                             data_loader_test, dataset_test,
                                             device)
-    print("pubmed: AP50: {:.3f}, AP75: {:.3f}, AP: {:.3f}, AR: {:.3f}".format(
+    print("COCO metrics summary: AP50: {:.3f}, AP75: {:.3f}, AP: {:.3f}, AR: {:.3f}".format(
         pubmed_stats['coco_eval_bbox'][1], pubmed_stats['coco_eval_bbox'][2],
         pubmed_stats['coco_eval_bbox'][0], pubmed_stats['coco_eval_bbox'][8]))
