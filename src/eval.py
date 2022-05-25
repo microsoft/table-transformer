@@ -528,8 +528,9 @@ def visualize(args, target, pred_logits, pred_bboxes):
                                      linestyle="--")
             ax.add_patch(rect) 
 
-    fig.set_size_inches((15, 18))
-    plt.savefig(bboxes_out_filepath)
+    fig.set_size_inches((15, 15))
+    plt.axis('off')
+    plt.savefig(bboxes_out_filepath, bbox_inches='tight', dpi=100)
 
     _, pred_cells, _ = objects_to_cells(pred_bboxes, pred_labels, pred_scores,
                                         tokens, structure_class_names,
@@ -555,8 +556,9 @@ def visualize(args, target, pred_logits, pred_bboxes):
                                  edgecolor="magenta",facecolor='none',linestyle="--")
         ax.add_patch(rect) 
 
-    fig.set_size_inches((15, 18))
-    plt.savefig(cells_out_filepath, dpi=150)
+    fig.set_size_inches((15, 15))
+    plt.axis('off')
+    plt.savefig(cells_out_filepath, bbox_inches='tight', dpi=100)
 
     plt.close('all')
 
