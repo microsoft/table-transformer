@@ -146,11 +146,8 @@ python main.py --data_type structure --config_file structure_config.json --data_
 ```
 
 ##  Evaluation
-Evaluation on the test data currently operates in two different modes.
-The first mode ("eval") computes standard metrics for object detection (AP, AP50, etc.).
-This mode applies to either the detection model or the structure recognition model.
-
-The second mode ("grits") computes the grid table similarity (GriTS) metrics for table structure recognition.
+The evaluation code computes standard object detection metrics (AP, AP50, etc.) for both the detection model and the structure model.
+When running evaluation for the structure model it also computes grid table similarity (GriTS) metrics for table structure recognition.
 GriTS is a measure of table cell correctness and is defined as the average correctness of each cell averaged over all tables.
 GriTS can measure the correctness of predicted cells based on:  1. cell topology alone, 2. cell topology and the reported bounding box location of each cell, or 3. cell topology and the reported text content of each cell.
 For more details on GriTS, please see our papers.
@@ -158,22 +155,22 @@ For more details on GriTS, please see our papers.
 To compute object detection metrics for the detection model:
 
 ```
-python main.py --mode eval --data_type detection --config_file detection_config.json --data_root_dir /path/to/detection_data --model_load_path /path/to/detection_model  
+python main.py --mode eval --data_type detection --config_file detection_config.json --data_root_dir /path/to/pascal_voc_detection_data --model_load_path /path/to/detection_model  
 ```
 
-To compute object detection metrics for the structure recognition model:
+To compute object detection and GriTS metrics for the structure recognition model:
 
 ```
-python main.py --mode eval --data_type structure --config_file structure_config.json --data_root_dir /path/to/structure_data --model_load_path /path/to/structure_model
-```
+python main.py --mode eval --data_type structure --config_file structure_config.json --data_root_dir /path/to/pascal_voc_structure_data --model_load_path /path/to/structure_model --table_words_dir /path/to/json_table_words_data
+```  
 
-To compute the GriTS metrics for the structure recognition model:
-
-```
-python main.py --mode grits --data_type structure --config_file structure_config.json --data_root_dir /path/to/structure_data --table_words_dir /path/to/table_words_data --model_load_path /path/to/structure_model --metrics_save_filepath /path/to/metrics_log_file
-```
-
-Detailed instance-level metrics for GriTS are saved to the log file specified in ```--metrics_save_filepath```.
+Optionally you can add the following flags for controlling parallelization, saving detailed metrics, and saving visualizations:  
+```--batch_size 4```: Batch size to use during the forward pass of the model.\
+```--eval_pool_size 4```: The worker pool size for CPU parallelization during GriTS metric computation.\
+```--eval_step 2```: The number of batches of processed input data to accumulate before passing all samples to the parallelized worker pool for GriTS metric computation.\
+```--debug```: Create and save visualizations of the model inference. For each input image "PMC1234567_table_0.jpg", this will save two visualizations: "PMC1234567_table_0_bboxes.jpg" containing the bounding boxes output by the model, and "PMC1234567_table_0_cells.jpg" containing the final table cell bounding boxes after post-processing. By default these are saved to a new folder "debug" in the current directory.\
+``` --debug_save_dir /path/to/folder```: Specify the folder to save visualizations to.\
+```--test_max_size 500```: Run evaluation on a randomly sampled subset of the data. Useful for quick verifications and checks.\
 
 ## Citing
 Our work can be cited using:
