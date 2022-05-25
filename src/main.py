@@ -19,7 +19,7 @@ import datasets.transforms as R
 
 import table_datasets as TD
 from table_datasets import PDFTablesDataset
-from eval import eval_coco, eval_tsr
+from eval import eval_coco
 
 
 def get_args():
@@ -49,9 +49,9 @@ def get_args():
     parser.add_argument('--table_words_dir',
                         help="Folder containg the bboxes of table words")
     parser.add_argument('--mode',
-                        choices=['train', 'eval', 'grits', 'grits-all'],
+                        choices=['train', 'eval'],
                         default='train',
-                        help="Toggle between different modes")
+                        help="Modes: training (train) and evaluation (eval)")
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--device', default='cuda')
     parser.add_argument('--lr_drop', default=1, type=int)
@@ -327,10 +327,6 @@ def main():
     elif args.mode == "eval":
         data_loader_test, dataset_test = get_data(args)
         eval_coco(args, model, criterion, postprocessors, data_loader_test, dataset_test, device)
-    elif args.mode == "grits" or args.mode == 'grits-all':
-        assert args.data_type == "structure", "GriTS is only applicable to structure recognition"
-        dataset_test = get_data(args)
-        eval_tsr(args, model, dataset_test, device)
 
 
 if __name__ == "__main__":
