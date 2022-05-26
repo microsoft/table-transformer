@@ -37,6 +37,9 @@ def compute_fscore(num_true_positives, num_true, num_positives):
 
 
 def initialize_DP(sequence1_length, sequence2_length):
+    """
+    Helper function to initialize dynamic programming data structures.
+    """
     # Initialize DP tables
     scores = np.zeros((sequence1_length + 1, sequence2_length + 1))
     pointers = np.zeros((sequence1_length + 1, sequence2_length + 1))
@@ -234,6 +237,14 @@ def iou(bbox1, bbox2):
 
 
 def cells_to_grid(cells, key='bbox'):
+    """
+    Convert from a list of cells to a matrix of grid cell features.
+    This matrix representation is the input to GriTS.
+
+    For key, use:
+    - 'bbox' for computing GriTS_Loc
+    - 'cell_text' for computing GriTS_Con
+    """
     if len(cells) == 0:
         return [[]]
     num_rows = max([max(cell['row_nums']) for cell in cells])+1
@@ -248,6 +259,10 @@ def cells_to_grid(cells, key='bbox'):
 
 
 def cells_to_relspan_grid(cells):
+    """
+    Convert from a list of cells to the matrix of grid cell features
+    used for computing GriTS_Top.
+    """
     if len(cells) == 0:
         return [[]]
     num_rows = max([max(cell['row_nums']) for cell in cells])+1
@@ -270,26 +285,30 @@ def cells_to_relspan_grid(cells):
     return cell_grid 
 
 
-def get_supercell_rows_and_columns(supercells, rows, columns):
-    matches_by_supercell = []
+def get_spanning_cell_rows_and_columns(spanning_cells, rows, columns):
+    """
+    Determine which grid cell locations (row-column) each spanning cell
+    corresponds to.
+    """
+    matches_by_spanning_cell = []
     all_matches = set()
-    for supercell in supercells:
+    for spanning_cell in spanning_cells:
         row_matches = set()
         column_matches = set()
         for row_num, row in enumerate(rows):
             bbox1 = [
-                supercell['bbox'][0], row['bbox'][1], supercell['bbox'][2],
+                spanning_cell['bbox'][0], row['bbox'][1], spanning_cell['bbox'][2],
                 row['bbox'][3]
             ]
-            bbox2 = Rect(supercell['bbox']).intersect(bbox1)
+            bbox2 = Rect(spanning_cell['bbox']).intersect(bbox1)
             if bbox2.getArea() / Rect(bbox1).getArea() >= 0.5:
                 row_matches.add(row_num)
         for column_num, column in enumerate(columns):
             bbox1 = [
-                column['bbox'][0], supercell['bbox'][1], column['bbox'][2],
-                supercell['bbox'][3]
+                column['bbox'][0], spanning_cell['bbox'][1], column['bbox'][2],
+                spanning_cell['bbox'][3]
             ]
-            bbox2 = Rect(supercell['bbox']).intersect(bbox1)
+            bbox2 = Rect(spanning_cell['bbox']).intersect(bbox1)
             if bbox2.getArea() / Rect(bbox1).getArea() >= 0.5:
                 column_matches.add(column_num)
         already_taken = False
@@ -302,7 +321,7 @@ def get_supercell_rows_and_columns(supercells, rows, columns):
         if not already_taken:
             for match in this_matches:
                 all_matches.add(match)
-            matches_by_supercell.append(this_matches)
+            matches_by_spanning_cell.append(this_matches)
             row_nums = [elem[0] for elem in this_matches]
             column_nums = [elem[1] for elem in this_matches]
             row_rect = Rect()
@@ -311,20 +330,31 @@ def get_supercell_rows_and_columns(supercells, rows, columns):
             column_rect = Rect()
             for column_num in column_nums:
                 column_rect.includeRect(columns[column_num]['bbox'])
-            supercell['bbox'] = list(row_rect.intersect(column_rect))
+            spanning_cell['bbox'] = list(row_rect.intersect(column_rect))
         else:
-            matches_by_supercell.append([])
+            matches_by_spanning_cell.append([])
 
-    return matches_by_supercell
+    return matches_by_spanning_cell
 
 
 def output_to_dilatedbbox_grid(bboxes, labels, scores):
+    """
+    Compute the matrix of grid cell features for GriTS_Loc but using the raw predicted
+    and ground truth bounding boxes, not the post-processed boxes.
+
+    In the case of the model used in the PubTables-1M paper, these boxes are
+    *dilated*, which means they are larger than the actual ground truth boxes.
+
+    Computing GriTS_Loc with dilated bounding boxes is probably not very useful
+    for model comparison but could be useful for understanding the behavior of
+    an individual model.
+    """
     rows = [{'bbox': bbox} for bbox, label in zip(bboxes, labels) if label == 2]
     columns = [{'bbox': bbox} for bbox, label in zip(bboxes, labels) if label == 1]
-    supercells = [{'bbox': bbox, 'score': 1} for bbox, label in zip(bboxes, labels) if label in [4, 5]]
+    spanning_cells = [{'bbox': bbox, 'score': 1} for bbox, label in zip(bboxes, labels) if label in [4, 5]]
     rows.sort(key=lambda x: x['bbox'][1]+x['bbox'][3])
     columns.sort(key=lambda x: x['bbox'][0]+x['bbox'][2])
-    supercells.sort(key=lambda x: -x['score'])
+    spanning_cells.sort(key=lambda x: -x['score'])
     cell_grid = []
     for row_num, row in enumerate(rows):
         column_grid = []
@@ -332,10 +362,10 @@ def output_to_dilatedbbox_grid(bboxes, labels, scores):
             bbox = Rect(row['bbox']).intersect(column['bbox'])
             column_grid.append(list(bbox))
         cell_grid.append(column_grid)
-    matches_by_supercell = get_supercell_rows_and_columns(supercells, rows, columns)
-    for matches, supercell in zip(matches_by_supercell, supercells):
+    matches_by_spanning_cell = get_spanning_cell_rows_and_columns(spanning_cells, rows, columns)
+    for matches, spanning_cell in zip(matches_by_spanning_cell, spanning_cells):
         for match in matches:
-            cell_grid[match[0]][match[1]] = supercell['bbox']
+            cell_grid[match[0]][match[1]] = spanning_cell['bbox']
     
     return cell_grid
 
@@ -437,25 +467,27 @@ def grits_from_html(true_html, pred_html):
     """
     Compute GriTS_Con and GriTS_Top for two HTML sequences.
     """
+
     metrics = {}
 
+    # Convert HTML to list of cells
     true_cells = html_to_cells(true_html)
     pred_cells = html_to_cells(pred_html)
 
-    # Compute grids/matrices for comparison
-    true_relspan_grid = np.array(cells_to_relspan_grid(true_cells))
-    pred_relspan_grid = np.array(cells_to_relspan_grid(pred_cells))
+    # Convert lists of cells to matrices of grid cells
+    true_topology_grid = np.array(cells_to_relspan_grid(true_cells))
+    pred_topology_grid = np.array(cells_to_relspan_grid(pred_cells))
     true_text_grid = np.array(cells_to_grid(true_cells, key='cell_text'), dtype=object)
     pred_text_grid = np.array(cells_to_grid(pred_cells, key='cell_text'), dtype=object)
 
-    # Compute GriTS_Top (topology)
+    # Compute GriTS_Top (topology) for ground truth and predicted matrices
     (metrics['grits_top'],
      metrics['grits_precision_top'],
      metrics['grits_recall_top'],
-     metrics['grits_top_upper_bound']) = grits_top(true_relspan_grid,
-                                                   pred_relspan_grid)
+     metrics['grits_top_upper_bound']) = grits_top(true_topology_grid,
+                                                   pred_topology_grid)
 
-    # Compute GriTS_Con (text content)
+    # Compute GriTS_Con (text content)  for ground truth and predicted matrices
     (metrics['grits_con'],
      metrics['grits_precision_con'],
      metrics['grits_recall_con'],
