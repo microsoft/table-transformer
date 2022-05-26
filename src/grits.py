@@ -3,6 +3,8 @@ Copyright (C) 2021 Microsoft Corporation
 """
 import itertools
 from difflib import SequenceMatcher
+import xml.etree.ElementTree as ET
+from collections import defaultdict
 
 import numpy as np
 from fitz import Rect
@@ -372,3 +374,92 @@ def grits_con(true_text_grid, pred_text_grid):
     return factored_2dmss(true_text_grid,
                           pred_text_grid,
                           reward_function=lcs_similarity)
+
+
+def html_to_cells(table_html):
+    """
+    Parse an HTML representation of a table into a list of cells.
+    """
+    try:
+        tree = ET.fromstring(table_html)
+    except Exception as e:
+        print(e)
+        return None
+    
+    table_cells = []
+    
+    occupied_columns_by_row = defaultdict(set)
+    current_row = -1
+
+    # Get all td tags
+    stack = []
+    stack.append((tree, False))
+    while len(stack) > 0:
+        current, in_header = stack.pop()
+
+        if current.tag == 'tr':
+            current_row += 1
+            
+        if current.tag == 'td' or current.tag =='th':
+            if "colspan" in current.attrib:
+                colspan = int(current.attrib["colspan"])
+            else:
+                colspan = 1
+            if "rowspan" in current.attrib:
+                rowspan = int(current.attrib["rowspan"])
+            else:
+                rowspan = 1
+            row_nums = list(range(current_row, current_row + rowspan))
+            try:
+                max_occupied_column = max(occupied_columns_by_row[current_row])
+                current_column = min(set(range(max_occupied_column+2)).difference(occupied_columns_by_row[current_row]))
+            except:
+                current_column = 0
+            column_nums = list(range(current_column, current_column + colspan))
+            for row_num in row_nums:
+                occupied_columns_by_row[row_num].update(column_nums)
+                
+            cell_dict = dict()
+            cell_dict['row_nums'] = row_nums
+            cell_dict['column_nums'] = column_nums
+            cell_dict['is_column_header'] = current.tag == 'th' or in_header
+            cell_dict['cell_text'] = ' '.join(current.itertext())
+            table_cells.append(cell_dict)
+
+        children = list(current)
+        for child in children[::-1]:
+            stack.append((child, in_header or current.tag == 'th' or current.tag == 'thead'))
+    
+    return table_cells
+
+
+def grits_from_html(true_html, pred_html):
+    """
+    Compute GriTS_Con and GriTS_Top for two HTML sequences.
+    """
+    metrics = {}
+
+    true_cells = html_to_cells(true_html)
+    pred_cells = html_to_cells(pred_html)
+
+    # Compute grids/matrices for comparison
+    true_relspan_grid = np.array(cells_to_relspan_grid(true_cells))
+    pred_relspan_grid = np.array(cells_to_relspan_grid(pred_cells))
+    true_text_grid = np.array(cells_to_grid(true_cells, key='cell_text'), dtype=object)
+    pred_text_grid = np.array(cells_to_grid(pred_cells, key='cell_text'), dtype=object)
+
+    # Compute GriTS_Top (topology)
+    (metrics['grits_top'],
+     metrics['grits_precision_top'],
+     metrics['grits_recall_top'],
+     metrics['grits_top_upper_bound']) = grits_top(true_relspan_grid,
+                                                   pred_relspan_grid)
+
+    # Compute GriTS_Con (text content)
+    (metrics['grits_con'],
+     metrics['grits_precision_con'],
+     metrics['grits_recall_con'],
+     metrics['grits_con_upper_bound']) = grits_con(true_text_grid,
+                                                   pred_text_grid)
+
+    return metrics
