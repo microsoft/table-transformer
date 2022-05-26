@@ -371,9 +371,12 @@ def rescale_bboxes(out_bbox, size):
     return b
 
 
-def get_bbox_decorations(label):
+def get_bbox_decorations(data_type, label):
     if label == 0:
-        return 'brown', 0, 3, None
+        if data_type == 'detection':
+            return 'brown', 0.05, 3, '//'
+        else:
+            return 'brown', 0, 3, None 
     elif label == 1:
         return 'red', 0.15, 2, None
     elif label == 2:
@@ -485,17 +488,12 @@ def eval_tsr_sample(target, pred_logits, pred_bboxes, mode):
 def visualize(args, target, pred_logits, pred_bboxes):
     img_filepath = target["img_path"]
     img_filename = img_filepath.split("/")[-1]
-    img_words_filepath = os.path.join(args.table_words_dir, img_filename.replace(".jpg", "_words.json"))
-    cells_out_filename = img_filename.replace(".jpg", "_cells.jpg")
-    cells_out_filepath = os.path.join(args.debug_save_dir, cells_out_filename)
+
     bboxes_out_filename = img_filename.replace(".jpg", "_bboxes.jpg")
     bboxes_out_filepath = os.path.join(args.debug_save_dir, bboxes_out_filename)
 
-    table_img = Image.open(img_filepath)
-    img_size = table_img.size
-
-    with open(img_words_filepath, 'r') as f:
-        tokens = json.load(f)
+    img = Image.open(img_filepath)
+    img_size = img.size
 
     m = pred_logits.softmax(-1).max(-1)
     pred_labels = list(m.indices.detach().cpu().numpy())
@@ -504,11 +502,14 @@ def visualize(args, target, pred_logits, pred_bboxes):
     pred_bboxes = [elem.tolist() for elem in rescale_bboxes(pred_bboxes, img_size)]
 
     fig,ax = plt.subplots(1)
-    ax.imshow(table_img, interpolation='lanczos')
+    ax.imshow(img, interpolation='lanczos')
 
     for bbox, label, score in zip(pred_bboxes, pred_labels, pred_scores):
-        if not label > 5 and score > 0.5:
-            color, alpha, linewidth, hatch = get_bbox_decorations(label)
+        if ((args.data_type == 'structure' and not label > 5)
+            or (args.data_type == 'detection' and not label > 1)
+            and score > 0.5):
+            color, alpha, linewidth, hatch = get_bbox_decorations(args.data_type,
+                                                                  label)
             # Fill
             rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1],
                                      linewidth=linewidth, alpha=alpha,
@@ -532,33 +533,41 @@ def visualize(args, target, pred_logits, pred_bboxes):
     plt.axis('off')
     plt.savefig(bboxes_out_filepath, bbox_inches='tight', dpi=100)
 
-    _, pred_cells, _ = objects_to_cells(pred_bboxes, pred_labels, pred_scores,
-                                        tokens, structure_class_names,
-                                        structure_class_thresholds, structure_class_map)
+    if args.data_type == 'structure':
+        img_words_filepath = os.path.join(args.table_words_dir, img_filename.replace(".jpg", "_words.json"))
+        cells_out_filename = img_filename.replace(".jpg", "_cells.jpg")
+        cells_out_filepath = os.path.join(args.debug_save_dir, cells_out_filename)
 
-    fig,ax = plt.subplots(1)
-    ax.imshow(table_img, interpolation='lanczos')
+        with open(img_words_filepath, 'r') as f:
+            tokens = json.load(f)
 
-    for cell in pred_cells:
-        bbox = cell['bbox']
-        if cell['header']:
-            alpha = 0.3
-        else:
-            alpha = 0.125
-        rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                 edgecolor='none',facecolor="magenta", alpha=alpha)
-        ax.add_patch(rect)
-        rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                 edgecolor="magenta",facecolor='none',linestyle="--",
-                                 alpha=0.08, hatch='///')
-        ax.add_patch(rect)
-        rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
-                                 edgecolor="magenta",facecolor='none',linestyle="--")
-        ax.add_patch(rect) 
+        _, pred_cells, _ = objects_to_cells(pred_bboxes, pred_labels, pred_scores,
+                                            tokens, structure_class_names,
+                                            structure_class_thresholds, structure_class_map)
 
-    fig.set_size_inches((15, 15))
-    plt.axis('off')
-    plt.savefig(cells_out_filepath, bbox_inches='tight', dpi=100)
+        fig,ax = plt.subplots(1)
+        ax.imshow(img, interpolation='lanczos')
+
+        for cell in pred_cells:
+            bbox = cell['bbox']
+            if cell['header']:
+                alpha = 0.3
+            else:
+                alpha = 0.125
+            rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
+                                    edgecolor='none',facecolor="magenta", alpha=alpha)
+            ax.add_patch(rect)
+            rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
+                                    edgecolor="magenta",facecolor='none',linestyle="--",
+                                    alpha=0.08, hatch='///')
+            ax.add_patch(rect)
+            rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
+                                    edgecolor="magenta",facecolor='none',linestyle="--")
+            ax.add_patch(rect) 
+
+        fig.set_size_inches((15, 15))
+        plt.axis('off')
+        plt.savefig(cells_out_filepath, bbox_inches='tight', dpi=100)
 
     plt.close('all')
 
