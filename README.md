@@ -11,7 +11,7 @@ The goal of PubTables-1M is to create a large, detailed, high-quality dataset fo
 ![table_extraction_v2](https://user-images.githubusercontent.com/10793386/139559159-cd23c972-8731-48ed-91df-f3f27e9f4d79.jpg)
 
 It contains:
-- 460,589 annotated document pages containing tables for table detection.
+- 575,305 annotated document pages containing tables for table detection.
 - 947,642 fully annotated tables including text content and complete location (bounding box) information for table structure recognition and functional analysis.
 - Full bounding boxes in both image and PDF coordinates for all table rows, columns, and cells (including blank cells), as well as other annotated structures such as column headers and projected row headers.
 - Rendered images of all tables and pages.
