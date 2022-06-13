@@ -1,7 +1,7 @@
 # PubTables-1M
 
 This repository contains code and links to data for the papers:
-- ["PubTables-1M: Towards comprehensive table extraction from unstructured documents"](https://arxiv.org/pdf/2110.00061.pdf)
+- ["PubTables-1M: Towards comprehensive table extraction from unstructured documents"](https://openaccess.thecvf.com/content/CVPR2022/html/Smock_PubTables-1M_Towards_Comprehensive_Table_Extraction_From_Unstructured_Documents_CVPR_2022_paper.html)
 - ["GriTS: Grid table similarity metric for table structure recognition"](https://arxiv.org/pdf/2203.12555.pdf)
 
 *Note: Updates to the code and papers (and documentation) are currently ongoing and we will announce when each of these is ready for a stable release.*
@@ -187,11 +187,13 @@ Optionally you can add flags for things like controlling parallelization, saving
 ## Citing
 Our work can be cited using:
 ```
-@article{smock2021pubtables1m,
-  author={Smock, Brandon and Pesala, Rohith and Abraham, Robin},
+@inproceedings{smock2022pubtables,
   title={Pub{T}ables-1{M}: Towards comprehensive table extraction from unstructured documents},
-  journal={arXiv preprint arXiv:2110.00061},
-  year={2021}
+  author={Smock, Brandon and Pesala, Rohith and Abraham, Robin},
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages={4634-4642},
+  year={2022},
+  month={June}
 }
 ```
 ```
