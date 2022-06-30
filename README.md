@@ -184,6 +184,15 @@ Optionally you can add flags for things like controlling parallelization, saving
 ``` --debug_save_dir /path/to/folder```: Specify the folder to save visualizations to.\
 ```--test_max_size 500```: Run evaluation on a randomly sampled subset of the data. Useful for quick verifications and checks.
 
+## Fine-tuning and Other Model Training Scenarios
+If model training is interrupted, it can be easily resumed by using the flag ```--model_load_path /path/to/model.pth``` and specifying the path to the saved dictionary file that contains the saved optimizer state.
+
+If you want to restart training by fine-tuning a saved checkpoint, such as ```model_20.pth```, use the flag ```--model_load_path /path/to/model_20.pth``` and the flag ```--load_weights_only``` to indicate that the previous optimizer state is not needed for resuming training.
+
+Whether fine-tuning or training a new model from scratch, you can optionally create a new config file with different training parameters than the default ones we used. Specify the new config file using: ```--config_file /path/to/new_structure_config.json```. Creating a new config file is useful, for example, if you want to use a different learning rate ```lr``` during fine-tuning.
+
+Alternatively, many of the arguments in the config file can be specified as command line arguments using their associated flags. Any argument specified as a command line argument overrides the value of the argument in the config file.
+
 ## Citing
 Our work can be cited using:
 ```
