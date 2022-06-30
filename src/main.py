@@ -40,6 +40,7 @@ def get_args():
         default='structure',
         help="toggle between structure recognition and table detection")
     parser.add_argument('--model_load_path', help="The path to trained model")
+    parser.add_argument('--load_weights_only', action='store_true')
     parser.add_argument('--model_save_dir', help="The output directory for saving model params and checkpoints")
     parser.add_argument('--metrics_save_filepath',
                         help='Filepath to save grits outputs',
@@ -247,12 +248,16 @@ def train(args, model, criterion, postprocessors, device):
 
         model.to(device)
 
-        if 'optimizer_state_dict' in checkpoint:
+        if not args.load_weights_only and 'optimizer_state_dict' in checkpoint:
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             resume_checkpoint = True
-        else:
+        elif args.load_weights_only:
             print("*** WARNING: Optimizer state of saved checkpoint not found. "
                   "Training will resume with new initialized values.")
+        else:
+            print("*** ERROR: Optimizer state of saved checkpoint not found. "
+                  "To resume training with new initialized values add the --load_weights_only flag.")
+            raise Exception("ERROR: Optimizer state of saved checkpoint not found. Must add --load_weights_only flag to resume training without.")          
         
         if 'epoch' in checkpoint:
             args.start_epoch = checkpoint['epoch'] + 1
