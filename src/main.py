@@ -5,6 +5,7 @@ import os
 import argparse
 import json
 from datetime import datetime
+import string
 import sys
 import random
 import numpy as np
@@ -55,13 +56,14 @@ def get_args():
                         default='train',
                         help="Modes: training (train) and evaluation (eval)")
     parser.add_argument('--debug', action='store_true')
-    parser.add_argument('--device', default='cuda')
-    parser.add_argument('--lr_drop', default=1, type=int)
+    parser.add_argument('--device')
+    parser.add_argument('--lr', type=float)
+    parser.add_argument('--lr_drop', type=int)
     parser.add_argument('--lr_gamma', type=float)
     parser.add_argument('--epochs', type=int)
     parser.add_argument('--checkpoint_freq', default=1, type=int)
     parser.add_argument('--batch_size', type=int)
-    parser.add_argument('--num_workers', default=2, type=int)
+    parser.add_argument('--num_workers', type=int)
     parser.add_argument('--train_max_size', type=int)
     parser.add_argument('--val_max_size', type=int)
     parser.add_argument('--test_max_size', type=int)
