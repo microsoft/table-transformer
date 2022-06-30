@@ -57,10 +57,10 @@ def get_args():
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--device', default='cuda')
     parser.add_argument('--lr_drop', default=1, type=int)
-    parser.add_argument('--lr_gamma', default=0.9, type=float)
-    parser.add_argument('--epochs', default=20, type=int)
+    parser.add_argument('--lr_gamma', type=float)
+    parser.add_argument('--epochs', type=int)
     parser.add_argument('--checkpoint_freq', default=1, type=int)
-    parser.add_argument('--batch_size', default=2, type=int)
+    parser.add_argument('--batch_size', type=int)
     parser.add_argument('--num_workers', default=2, type=int)
     parser.add_argument('--train_max_size', type=int)
     parser.add_argument('--val_max_size', type=int)
@@ -330,7 +330,10 @@ def train(args, model, criterion, postprocessors, device):
 def main():
     cmd_args = get_args().__dict__
     config_args = json.load(open(cmd_args['config_file'], 'rb'))
-    config_args.update(cmd_args)
+    for key, value in cmd_args.items():
+        if not key in config_args or not value is None:
+            config_args[key] = value
+    #config_args.update(cmd_args)
     args = type('Args', (object,), config_args)
     print(args.__dict__)
     print('-' * 100)
