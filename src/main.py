@@ -254,15 +254,19 @@ def train(args, model, criterion, postprocessors, device):
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             resume_checkpoint = True
         elif args.load_weights_only:
-            print("*** WARNING: Optimizer state of saved checkpoint not found. "
-                  "Training will resume with new initialized values.")
+            print("*** WARNING: Resuming training and ignoring optimzer state. "
+                  "Training will resume with new initialized values. "
+                  "To use current optimizer state, remove the --load_weights_only flag.")
         else:
             print("*** ERROR: Optimizer state of saved checkpoint not found. "
                   "To resume training with new initialized values add the --load_weights_only flag.")
             raise Exception("ERROR: Optimizer state of saved checkpoint not found. Must add --load_weights_only flag to resume training without.")          
         
-        if 'epoch' in checkpoint:
+        if not args.load_weights_only and 'epoch' in checkpoint:
             args.start_epoch = checkpoint['epoch'] + 1
+        elif args.load_weights_only:
+            print("*** WARNING: Resuming training and ignoring previously saved epoch. "
+                  "To resume from previously saved epoch, remove the --load_weights_only flag.")
         else:
             print("*** WARNING: Epoch of saved model not found. Starting at epoch {}.".format(args.start_epoch))
 
@@ -284,6 +288,11 @@ def train(args, model, criterion, postprocessors, device):
     print("Output model path: ", model_save_path)
     if not resume_checkpoint and os.path.exists(model_save_path):
         print("*** WARNING: Output model path exists but is not being used to resume training; training will overwrite it.")
+
+    if args.start_epoch >= args.epochs:
+        print("*** WARNING: Starting epoch ({}) is greater or equal to the number of training epochs ({}).".format(
+            args.start_epoch, args.epochs
+        ))
 
     print("Start training")
     start_time = datetime.now()
