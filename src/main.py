@@ -5,6 +5,7 @@ import os
 import argparse
 import json
 from datetime import datetime
+import string
 import sys
 import random
 import numpy as np
@@ -40,6 +41,8 @@ def get_args():
         default='structure',
         help="toggle between structure recognition and table detection")
     parser.add_argument('--model_load_path', help="The path to trained model")
+    parser.add_argument('--load_weights_only', action='store_true')
+    parser.add_argument('--model_save_dir', help="The output directory for saving model params and checkpoints")
     parser.add_argument('--metrics_save_filepath',
                         help='Filepath to save grits outputs',
                         default='')
@@ -53,13 +56,14 @@ def get_args():
                         default='train',
                         help="Modes: training (train) and evaluation (eval)")
     parser.add_argument('--debug', action='store_true')
-    parser.add_argument('--device', default='cuda')
-    parser.add_argument('--lr_drop', default=1, type=int)
-    parser.add_argument('--lr_gamma', default=0.9, type=float)
-    parser.add_argument('--epochs', default=20, type=int)
+    parser.add_argument('--device')
+    parser.add_argument('--lr', type=float)
+    parser.add_argument('--lr_drop', type=int)
+    parser.add_argument('--lr_gamma', type=float)
+    parser.add_argument('--epochs', type=int)
     parser.add_argument('--checkpoint_freq', default=1, type=int)
-    parser.add_argument('--batch_size', default=2, type=int)
-    parser.add_argument('--num_workers', default=2, type=int)
+    parser.add_argument('--batch_size', type=int)
+    parser.add_argument('--num_workers', type=int)
     parser.add_argument('--train_max_size', type=int)
     parser.add_argument('--val_max_size', type=int)
     parser.add_argument('--test_max_size', type=int)
@@ -204,16 +208,6 @@ def train(args, model, criterion, postprocessors, device):
     """
     Training loop
     """
-    # Paths
-    run_date = datetime.now().strftime("%Y%m%d%H%M%S")
-    output_directory = os.path.join(args.data_root_dir, "output", run_date)
-    if args.model_load_path:
-        output_directory = os.path.split(args.model_load_path)[0]
-    print("Output directory: ", output_directory)
-    model_save_path = os.path.join(output_directory, 'model.pth')
-
-    if not os.path.exists(output_directory):
-        os.makedirs(output_directory)
 
     print("loading data")
     dataloading_time = datetime.now()
@@ -248,12 +242,57 @@ def train(args, model, criterion, postprocessors, device):
     max_batches_per_epoch = int(train_len / args.batch_size)
     print("Max batches per epoch: {}".format(max_batches_per_epoch))
 
+    resume_checkpoint = False
     if args.model_load_path:
         checkpoint = torch.load(args.model_load_path, map_location='cpu')
-        model.load_state_dict(checkpoint['model_state_dict'])
+        if 'model_state_dict' in checkpoint:
+            model.load_state_dict(checkpoint['model_state_dict'])
+
         model.to(device)
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        args.start_epoch = checkpoint['epoch'] + 1
+
+        if not args.load_weights_only and 'optimizer_state_dict' in checkpoint:
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            resume_checkpoint = True
+        elif args.load_weights_only:
+            print("*** WARNING: Resuming training and ignoring optimzer state. "
+                  "Training will resume with new initialized values. "
+                  "To use current optimizer state, remove the --load_weights_only flag.")
+        else:
+            print("*** ERROR: Optimizer state of saved checkpoint not found. "
+                  "To resume training with new initialized values add the --load_weights_only flag.")
+            raise Exception("ERROR: Optimizer state of saved checkpoint not found. Must add --load_weights_only flag to resume training without.")          
+        
+        if not args.load_weights_only and 'epoch' in checkpoint:
+            args.start_epoch = checkpoint['epoch'] + 1
+        elif args.load_weights_only:
+            print("*** WARNING: Resuming training and ignoring previously saved epoch. "
+                  "To resume from previously saved epoch, remove the --load_weights_only flag.")
+        else:
+            print("*** WARNING: Epoch of saved model not found. Starting at epoch {}.".format(args.start_epoch))
+
+    # Use user-specified save directory, if specified
+    if args.model_save_dir:
+        output_directory = args.model_save_dir
+    # If resuming from a checkpoint with optimizer state, save into same directory
+    elif args.model_load_path and resume_checkpoint:
+        output_directory = os.path.split(args.model_load_path)[0]
+    # Create new save directory
+    else:
+        run_date = datetime.now().strftime("%Y%m%d%H%M%S")
+        output_directory = os.path.join(args.data_root_dir, "output", run_date)
+
+    if not os.path.exists(output_directory):
+        os.makedirs(output_directory)
+    print("Output directory: ", output_directory)
+    model_save_path = os.path.join(output_directory, 'model.pth')
+    print("Output model path: ", model_save_path)
+    if not resume_checkpoint and os.path.exists(model_save_path):
+        print("*** WARNING: Output model path exists but is not being used to resume training; training will overwrite it.")
+
+    if args.start_epoch >= args.epochs:
+        print("*** WARNING: Starting epoch ({}) is greater or equal to the number of training epochs ({}).".format(
+            args.start_epoch, args.epochs
+        ))
 
     print("Start training")
     start_time = datetime.now()
@@ -302,7 +341,10 @@ def train(args, model, criterion, postprocessors, device):
 def main():
     cmd_args = get_args().__dict__
     config_args = json.load(open(cmd_args['config_file'], 'rb'))
-    config_args.update(cmd_args)
+    for key, value in cmd_args.items():
+        if not key in config_args or not value is None:
+            config_args[key] = value
+    #config_args.update(cmd_args)
     args = type('Args', (object,), config_args)
     print(args.__dict__)
     print('-' * 100)
