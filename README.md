@@ -105,7 +105,7 @@ It comes in 5 tar.gz files:
   - ```/train```: 460,589 XML files containing bounding boxes in PASCAL VOC format
   - ```/test```: 57,125 XML files containing bounding boxes in PASCAL VOC format
   - ```/val```: 57,591 XML files containing bounding boxes in PASCAL VOC format
-- PubTables-1M-Image_Page_Words_JSON.tar.gz: Bounding boxes and text content for all of the words in each cropped table image
+- PubTables-1M-Image_Page_Words_JSON.tar.gz: Bounding boxes and text content for all of the words in each page image
   - One JSON file per page image (plus some extra unused files)
 - PubTables-1M-Image_Table_Structure_PASCAL_VOC.tar.gz: Training and evaluation data for the structure (and functional analysis) model
   - ```/images```: 947,642 JPG files; one file for each page image
