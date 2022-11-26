@@ -21,6 +21,7 @@ It contains:
 Additionally, cells in the headers are *canonicalized* and we implement multiple *quality control* steps to ensure the annotations are as free of noise as possible. For more details, please see [our paper](https://arxiv.org/pdf/2110.00061.pdf).
 
 ## News
+`11/25/2022`: We have also made [the full PubTables-1M dataset](https://huggingface.co/datasets/bsmock/pubtables-1m) available for download from Hugging Face.\
 `05/05/2022`: We have released the pre-trained weights for the table structure recognition model trained on PubTables-1M.\
 `03/23/2022`: Our paper "GriTS: Grid table similarity metric for table structure recognition" is now available on [arXiv](https://arxiv.org/pdf/2203.12555.pdf)\
 `03/04/2022`: We have released the pre-trained weights for the table detection model trained on PubTables-1M.\
@@ -99,7 +100,9 @@ We provide the pre-trained models for table detection and table structure recogn
 ## Training and Evaluation Data
 [PubTables-1M](https://msropendata.com/datasets/505fcbe3-1383-42b1-913a-f651b8b712d3) is available for download from [Microsoft Research Open Data](https://msropendata.com/).
 
-It comes in 5 tar.gz files:
+We have also uploaded [the full set of archives](https://huggingface.co/datasets/bsmock/pubtables-1m) to Hugging Face.
+
+The dataset on Microsoft Research Open Data comes in 5 tar.gz files:
 - PubTables-1M-Image_Page_Detection_PASCAL_VOC.tar.gz: Training and evaluation data for the detection model
   - ```/images```: 575,305 JPG files; one file for each page image
   - ```/train```: 460,589 XML files containing bounding boxes in PASCAL VOC format
