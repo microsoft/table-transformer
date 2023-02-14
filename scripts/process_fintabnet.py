@@ -1,6 +1,6 @@
-'''
-Copyright 2022 Microsoft.
-'''
+"""
+Copyright (C) 2023 Microsoft Corporation
+"""
 
 import json
 import os
