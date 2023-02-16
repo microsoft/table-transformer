@@ -1,5 +1,8 @@
 """
 Copyright (C) 2023 Microsoft Corporation
+
+If you use this code in your published work, we request that you cite our papers
+and table-transformer GitHub repo.
 """
 
 import json
@@ -1055,12 +1058,12 @@ def main():
 
     pdf_directory = os.path.join(args.data_dir, "pdf")
 
-    output_json_directory = os.path.join(args.output_dir, "FinTabNet.a6_PDF_Annotations_JSON")
+    output_json_directory = os.path.join(args.output_dir, "FinTabNet.c_PDF_Annotations_JSON")
     if not os.path.exists(output_json_directory):
         os.makedirs(output_json_directory)
 
     output_subdirs = ['images', 'train', 'test', 'val']
-    output_structure_directory = os.path.join(args.output_dir, "FinTabNet.a6_Image_Structure_PASCAL_VOC")
+    output_structure_directory = os.path.join(args.output_dir, "FinTabNet.c_Image_Structure_PASCAL_VOC")
     if not os.path.exists(output_structure_directory):
         os.makedirs(output_structure_directory)
     for subdir in output_subdirs:
@@ -1068,7 +1071,7 @@ def main():
         if not os.path.exists(subdirectory):
             os.makedirs(subdirectory)
 
-    output_table_words_directory = os.path.join(args.output_dir, "FinTabNet.a6_Image_Table_Words_JSON")
+    output_table_words_directory = os.path.join(args.output_dir, "FinTabNet.c_Image_Table_Words_JSON")
     if not os.path.exists(output_table_words_directory):
         os.makedirs(output_table_words_directory)
 
@@ -1446,7 +1449,7 @@ def main():
                 table_image_filename = document_id + "_table_" + str(table_num) + ".jpg"
                 table_image_filepath = os.path.join(output_structure_directory, "images", table_image_filename)
                 table_annotation = create_pascal_voc_page_element(table_image_filename, table_img.width, table_img.height,
-                                                                  database="FinTabNet.a6-Structure")
+                                                                  database="FinTabNet.c-Structure")
 
 
                 for entry in table_boxes:
