@@ -1,3 +1,23 @@
+"""
+Copyright (C) 2023 Microsoft Corporation
+
+USAGE NOTES:
+This code is currently our best attempt to piece together the code that was used to create PubTables-1M.
+
+It processes pairs of PDF and NXML files in the PubMed Open Access corpus.
+
+We have not verified yet that it completely works.
+
+We are still refining it to make it easier to use.
+
+There is no guarantee we finish refining this code. Praise motivates.
+
+You are free to fix/modify this code for your own purpose.
+
+If you use this code in your published work, we request that you cite our PubTables-1M paper
+and table-transformer GitHub repo.
+"""
+
 import os
 import re
 import xml.etree.ElementTree as ET
@@ -14,10 +34,6 @@ import numpy as np
 import fitz
 from fitz import Rect
 import editdistance
-
-#import pubmedannotate as pa
-#import pubmeddetection as pd
-#import utils
 
 class timeout:
     def __init__(self, seconds=1, error_message='Timeout'):
@@ -1011,6 +1027,14 @@ def is_good_bbox(bbox, page_bbox):
     return False
 
 
+def iob(bbox1, bbox2):
+    """
+    Compute the intersection area over box area, for bbox1.
+    """
+    intersection = Rect(bbox1).intersect(bbox2)
+    return intersection.get_area() / Rect(bbox1).get_area()
+
+
 def create_document_page_image(doc, page_num, output_image_max_dim=1000):
     page = doc[page_num]
     page_width = page.rect[2]
@@ -1093,6 +1117,23 @@ def create_pascal_voc_object_element(class_name, bbox, page_bbox, output_image_m
     return object_
 
 
+def create_pascal_voc_object_element_direct(class_name, bbox):    
+    object_ = ET.Element("object")
+    name = ET.SubElement(object_, "name").text = class_name
+    pose = ET.SubElement(object_, "pose").text = "Frontal"
+    truncated = ET.SubElement(object_, "truncated").text = "0"
+    difficult = ET.SubElement(object_, "difficult").text = "0"
+    occluded = ET.SubElement(object_, "occluded").text = "0"
+    bndbox = ET.SubElement(object_, "bndbox")
+    
+    ET.SubElement(bndbox, "xmin").text = "{0:.4f}".format(bbox[0])
+    ET.SubElement(bndbox, "ymin").text = "{0:.4f}".format(bbox[1])
+    ET.SubElement(bndbox, "xmax").text = "{0:.4f}".format(bbox[2])
+    ET.SubElement(bndbox, "ymax").text = "{0:.4f}".format(bbox[3])
+    
+    return object_
+
+
 def save_xml_pascal_voc(page_annotation, filepath):
     xmlstr = minidom.parseString(ET.tostring(page_annotation)).toprettyxml(indent="   ")
     with open(filepath, "w") as f:
@@ -1132,7 +1173,7 @@ def get_tokens_in_table_img(page_words, table_img_bbox):
         word['block_num'] = 0
         tokens.append(word)
 
-    tokens_in_table = [token for token in tokens if utils.iob(token['bbox'], table_img_bbox) >= 0.5]
+    tokens_in_table = [token for token in tokens if iob(token['bbox'], table_img_bbox) >= 0.5]
     
     return tokens_in_table
 
@@ -1188,7 +1229,7 @@ def temp():
                     page_words = page_words['words']
                     
                 # Crop
-                table_bbox = table_entry['pdf']['bbox']
+                table_bbox = table_entry['pdf_bbox']
                 crop_bbox = [table_bbox[0]-30,
                             table_bbox[1]-30,
                             table_bbox[2]+30,
@@ -1237,19 +1278,7 @@ def temp():
                 #print(table_words_filepath)
                 with open(table_words_filepath, 'w', encoding='utf8') as f:
                     json.dump(tokens_in_table_img, f)
-                    
-                #ax = plt.gca()
-                #ax.imshow(img, interpolation='lanczos')
-                    
-                #for entry in tokens_in_table_img:
-                #    bbox = entry['bbox']
-                #    color = 'blue'
-                #    plot_bbox(ax, bbox, color=color, linewidth=1, alpha=0.2)
-                
-                #plt.gcf().set_size_inches((16, 16))
-                #plt.show()
 
-                good_count += 1
             except KeyboardInterrupt:
                 break
             except FileNotFoundError:
@@ -1282,6 +1311,8 @@ def main():
 
     source_directory = args.data_dir
     timeout_seconds = args.timeout_seconds
+    detection_ds_name = args.det_ds_name
+    structure_ds_name = args.str_ds_name
     VERBOSE = args.verbose
 
     output_directory = args.output_dir # location where to save data
@@ -1335,7 +1366,7 @@ def main():
     table_encounters = 0
     low_quality_tables = 0
     tables_for_detection = 0
-
+    table_image_count = 0
 
     '''
     Process each PDF-XML file pair to annotate the tables in the PDF.
@@ -1535,7 +1566,7 @@ def main():
                     #-------------------#
                     D, _ = table_text_edit_distance(table_dict['cells'])
                     if VERBOSE:
-                        print("Table text content quality score: {}".format(D))
+                        print("Table text content annotation disagreement score: {}".format(D))
                     if D > 0.05:
                         low_quality_tables += 1
                         print(">>>> LOW QUALITY TABLE ANNOTATION <<<<")
@@ -1597,6 +1628,8 @@ def main():
             
             # Each table has associated bounding boxes
             for table_dict in annotated_table_dicts:
+                if 'timeout' in table_dict and table_dict['timeout']:
+                    continue
                 try:
                     table_boxes = []
 
@@ -1628,7 +1661,7 @@ def main():
 
                         # Initialize PASCAL VOC XML
                         page_annotation = create_pascal_voc_page_element(image_filename, img.width, img.height,
-                                                                        database="PubTables-1M-Detection")
+                                                                        database=detection_ds_name)
 
                         for entry in boxes:
                             # Add to PASCAl VOC
@@ -1646,8 +1679,186 @@ def main():
         # Save results for this document
         if VERBOSE: print(save_filepath)
         save_full_tables_annotation(annotated_table_dicts, save_filepath)
-        if VERBOSE: print("SAVED!")
+        if VERBOSE: print("DETECTION SAMPLE SAVED!")
 
+        #-----------------------------------#
+        # TABLE STRUCTURE IMAGE DATA
+        #-----------------------------------#
+        for table_num, table_entry in enumerate(annotated_table_dicts):
+            if 'timeout' in table_entry and table_entry['timeout']:
+                continue
+
+            try:
+                table_boxes = []
+                    
+                # Check if table has at least two columns
+                num_columns = table_entry['num_columns']
+                if num_columns < 2:
+                    continue
+                if not 'columns' in table_entry:
+                    continue
+                    
+                # Check if table has at least one row
+                num_rows = table_entry['num_rows']
+                if num_rows < 1:
+                    continue
+                if not 'rows' in table_entry:
+                    continue
+                
+                rotated = table_entry['pdf_is_rotated']
+                
+                page_num = table_entry['pdf_page_index']          
+
+                # Create structure recognition data
+                dict_entry = {'class_label': 'table', 'bbox': table_entry['pdf_table_bbox']}
+                table_boxes.append(dict_entry)
+                
+                # Dilation
+                if rotated:
+                    row1_idx = 2
+                    row2_idx = 0
+                    col1_idx = 1
+                    col2_idx = 3
+                else:
+                    row1_idx = 3
+                    row2_idx = 1
+                    col1_idx = 2
+                    col2_idx = 0
+                rows = table_entry['rows']
+                rows = sorted(rows, key=lambda k: k['pdf_row_bbox'][row1_idx]) 
+                if len(rows) > 1:
+                    for row1, row2 in zip(rows[:-1], rows[1:]):
+                        mid_point = (row1['pdf_row_bbox'][row1_idx] + row2['pdf_row_bbox'][row2_idx]) / 2
+                        row1['pdf_row_bbox'][row1_idx] = mid_point
+                        row2['pdf_row_bbox'][row2_idx] = mid_point
+                columns = table_entry['columns']
+                if rotated:
+                    columns = sorted(columns, key=lambda k: -k['pdf_column_bbox'][col1_idx])
+                else:
+                    columns = sorted(columns, key=lambda k: k['pdf_column_bbox'][col1_idx]) 
+                if len(columns) > 1:
+                    for col1, col2 in zip(columns[:-1], columns[1:]):
+                        mid_point = (col1['pdf_column_bbox'][col1_idx] + col2['pdf_column_bbox'][col2_idx]) / 2
+                        col1['pdf_column_bbox'][col1_idx] = mid_point
+                        col2['pdf_column_bbox'][col2_idx] = mid_point
+                for cell in table_entry['cells']:
+                    column_nums = cell['column_nums']
+                    row_nums = cell['row_nums']
+                    column_rect = Rect()
+                    row_rect = Rect()
+                    for column_num in column_nums:
+                        column_rect.include_rect(columns[column_num]['pdf_column_bbox'])
+                    for row_num in row_nums:
+                        row_rect.include_rect(rows[row_num]['pdf_row_bbox'])
+                    cell_rect = column_rect.intersect(row_rect)
+                    cell['pdf_bbox'] = list(cell_rect)
+                
+                header_rect = Rect()
+                for cell in table_entry['cells']:
+                    cell_bbox = cell['pdf_bbox']
+                    blank = len(cell['xml_text_content'].strip()) == 0
+                    supercell = len(cell['row_nums']) > 1 or len(cell['column_nums']) > 1
+                    header = cell['is_column_header']
+                    if not header and len(cell['column_nums']) == num_columns:
+                        dict_entry = {'class_label': 'table projected row header', 'bbox': cell['pdf_bbox']}
+                        table_boxes.append(dict_entry)                      
+                    elif supercell and not blank:
+                        dict_entry = {'class_label': 'table spanning cell', 'bbox': cell['pdf_bbox']}
+                        table_boxes.append(dict_entry)                     
+                        
+                    if header:
+                        header_rect.include_rect(cell_bbox)
+
+                if header_rect.get_area() > 0:
+                    dict_entry = {'class_label': 'table column header', 'bbox': list(header_rect)}
+                    table_boxes.append(dict_entry)
+                        
+                for row in table_entry['rows']:
+                    row_bbox = row['pdf_row_bbox']
+                    dict_entry = {'class_label': 'table row', 'bbox': row_bbox}
+                    table_boxes.append(dict_entry) 
+                
+                # table_entry['columns']
+                for column in table_entry['columns']:
+                    dict_entry = {'class_label': 'table column', 'bbox': column['pdf_column_bbox']}
+                    table_boxes.append(dict_entry) 
+        
+                # Create detection PASCAL VOC XML file and page image
+                page_bbox = table_entry['pdf_full_page_bbox']
+
+                # Get page image            
+                page_image_filename = pmc_id + "_" + str(page_num) + ".jpg"
+                page_image_filepath = os.path.join(output_directory, page_image_filename)
+                if os.path.exists(page_image_filepath):
+                    img = Image.open(page_image_filepath)
+                else:
+                    #print("Creating image")
+                    img = create_document_page_image(doc, page_num, output_image_max_dim=1000)
+                    
+                # Crop
+                table_bbox = table_entry['pdf_table_bbox']
+                crop_bbox = [table_bbox[0]-30,
+                            table_bbox[1]-30,
+                            table_bbox[2]+30,
+                            table_bbox[3]+30]
+                zoom = 1000 / max(page_bbox)
+                
+                # Convert to image coordinates
+                crop_bbox = [int(round(zoom*elem)) for elem in crop_bbox]
+                
+                # Keep within image
+                crop_bbox = [max(0, crop_bbox[0]),
+                            max(0, crop_bbox[1]),
+                            min(img.size[0], crop_bbox[2]),
+                            min(img.size[1], crop_bbox[3])]
+                
+                img = img.crop(crop_bbox)                    
+                for entry in table_boxes:
+                    bbox = entry['bbox']
+                    bbox = [zoom*elem for elem in bbox]
+                    bbox = [bbox[0]-crop_bbox[0]-1,
+                            bbox[1]-crop_bbox[1]-1,
+                            bbox[2]-crop_bbox[0]-1,
+                            bbox[3]-crop_bbox[1]-1]
+                    entry['bbox'] = bbox
+                    
+                # If rotated, rotate:
+                if rotated:
+                    img = img.rotate(270, expand=True)
+                    for entry in table_boxes:
+                        bbox = entry['bbox']
+                        bbox = [img.size[0]-bbox[3]-1,bbox[0],img.size[0]-bbox[1]-1,bbox[2]]
+                        entry['bbox'] = bbox
+                
+                # Initialize PASCAL VOC XML
+                table_image_filename = pmc_id + "_table_" + str(table_num) + ".jpg"
+                table_image_filepath = os.path.join(output_directory, table_image_filename)
+                table_annotation = create_pascal_voc_page_element(table_image_filename,
+                                                                 img.width, img.height,
+                                                                 database=structure_ds_name)
+
+                for entry in table_boxes:
+                    bbox = entry['bbox']
+
+                    # Add to PASCAl VOC
+                    element = create_pascal_voc_object_element_direct(entry['class_label'],
+                                                                      entry['bbox'])
+                    table_annotation.append(element)              
+
+                img.save(table_image_filepath)
+
+                xml_filename = pmc_id + "_table_" + str(table_num) + ".xml"
+                xml_filepath = os.path.join(output_directory, xml_filename)
+                if VERBOSE: print(xml_filepath)
+                save_xml_pascal_voc(table_annotation, xml_filepath)
+                table_image_count += 1
+                if VERBOSE: print("STRUCTURE SAMPLE SAVED!")
+            except KeyboardInterrupt:
+                break
+            except Exception as err:
+                print("error")
+                print(traceback.format_exc())
+                print("idx: {}".format(idx))
 
     print("Number of table encounters: {}".format(table_encounters))
     print("Number of table annotations completed: {}".format(annotated_tables))
@@ -1655,6 +1866,7 @@ def main():
     print("Number of low quality tables removed: {}".format(low_quality_tables))
     print("Number of exceptions: {}".format(exception_count))
     print("Numer of timeouts: {}".format(timeout_count))
+    print("Numer of cropped tables saved in PASCAL VOC format: {}".format(table_image_count))
 
 if __name__ == "__main__":
     main()
