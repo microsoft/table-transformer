@@ -3,7 +3,7 @@ Copyright (C) 2023 Microsoft Corporation
 
 Script to process, edit, filter, and canonicalize SciTSR to align it with PubTables-1M.
 
-We still need to verify that this script works.
+We still need to verify that this script works correctly.
 
 If you use this code in your published work, we request that you cite our papers
 and table-transformer GitHub repo.
@@ -28,7 +28,7 @@ from tqdm import tqdm
 
 def adjust_bbox_coordinates(data, doc):
     # Change bbox coordinates to be relative to PyMuPDF page.rect coordinate space
-    media_box = doc[0].MediaBox
+    media_box = doc[0].mediabox
     mat = doc[0].transformation_matrix
 
     for cell in ['cells']:
@@ -233,7 +233,7 @@ def string_similarity(string1, string2):
 # (for example, the bolded text is aligned correctly but not the normal text)
 def adjust_bbox_coordinates(data, doc):
     # Change bbox coordinates to be relative to PyMuPDF page.rect coordinate space
-    media_box = doc[0].MediaBox
+    media_box = doc[0].mediabox
     mat = doc[0].transformation_matrix
 
     for cell in data['html']['cells']:
@@ -254,7 +254,7 @@ def create_document_page_image(doc, page_num, zoom=None, output_image_max_dim=10
         zoom = output_image_max_dim / max(page.rect)
         
     mat = fitz.Matrix(zoom, zoom)
-    pix = page.getPixmap(matrix = mat, alpha = False)
+    pix = page.get_pixmap(matrix = mat, alpha = False)
     img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
     
     return img
@@ -391,7 +391,7 @@ def complete_table_grid(table_dict):
 
         bbox = cell['pdf_text_tight_bbox'] 
 
-        table_rect.includeRect(list(bbox))
+        table_rect.include_rect(list(bbox))
         
         min_row = min(cell['row_nums'])
         if rects_by_row[min_row][1] is None:
@@ -464,16 +464,16 @@ def complete_table_grid(table_dict):
                 table_dict['reject'].append("rows intersect")
         
     # Intersect each row and column to determine grid cell bounding boxes
-    #page_words = page.getTextWords()
+    #page_words = page.get_text_words()
     for cell in table_dict['cells']:
         rows_rect = Rect()
         cols_rect = Rect()
 
         for row_num in cell['row_nums']:
-            rows_rect.includeRect(table_dict['rows'][row_num]['pdf_row_bbox'])
+            rows_rect.include_rect(table_dict['rows'][row_num]['pdf_row_bbox'])
 
         for col_num in cell['column_nums']:
-            cols_rect.includeRect(table_dict['columns'][col_num]['pdf_column_bbox'])
+            cols_rect.include_rect(table_dict['columns'][col_num]['pdf_column_bbox'])
 
         pdf_bbox = rows_rect.intersect(cols_rect)
         cell['pdf_bbox'] = list(pdf_bbox)
@@ -566,8 +566,8 @@ def merge_group(table_dict, group):
             cell2_text_rect = Rect(cell2['pdf_text_tight_bbox'])
         except:
             cell2_text_rect = Rect()
-        cell_text_rect = cell_text_rect.includeRect(list(cell2_text_rect))
-        if cell_text_rect.getArea() == 0:
+        cell_text_rect = cell_text_rect.include_rect(list(cell2_text_rect))
+        if cell_text_rect.get_area() == 0:
             cell['pdf_text_tight_bbox'] = []
         else:
             cell['pdf_text_tight_bbox'] = list(cell_text_rect)
@@ -1134,7 +1134,7 @@ def extract_pdf_text(table_dict, page_words, threshold=0.5):
         pdf_text_tight_bbox = cell['pdf_text_tight_bbox']
         pdf_bbox = cell['pdf_bbox']
         
-        cell_page_words = [w for w in page_words if Rect(w[:4]).intersect(list(pdf_bbox)).getArea() / Rect(w[:4]).getArea() > threshold]
+        cell_page_words = [w for w in page_words if Rect(w[:4]).intersect(list(pdf_bbox)).get_area() / Rect(w[:4]).get_area() > threshold]
         cell_words = [w[4] for w in cell_page_words]
         cell_text = ''.join(cell_words)
         
@@ -1152,7 +1152,7 @@ def extract_pdf_text(table_dict, page_words, threshold=0.5):
         
         cell_words_rect = Rect()
         for w in cell_page_words:
-            cell_words_rect.includeRect(w[:4])
+            cell_words_rect.include_rect(w[:4])
         cell_words = [w[4] for w in cell_page_words]
         cell_text = ' '.join(cell_words)
         cell_text = cell_text.replace(' .', '.').replace(' ,', ',')
@@ -1160,7 +1160,7 @@ def extract_pdf_text(table_dict, page_words, threshold=0.5):
             table_dict['reject'].append("dots retained")
             #raise DotsRetainedException("Dots retained in text [{}] '{}'".format(cell_words, cell_text))
         cell['pdf_text_content'] = cell_text
-        if cell_words_rect.getArea() > 0:
+        if cell_words_rect.get_area() > 0:
             new_pdf_text_tight_bbox = list(cell_words_rect)
             if not pdf_text_tight_bbox == new_pdf_text_tight_bbox:
                 adjusted_text_tight_bbox = True
@@ -1171,7 +1171,7 @@ def extract_pdf_text(table_dict, page_words, threshold=0.5):
 
 def overlap(bbox1, bbox2):
     try:
-        return Rect(bbox1).intersect(list(bbox2)).getArea() / Rect(bbox1).getArea()
+        return Rect(bbox1).intersect(list(bbox2)).get_area() / Rect(bbox1).get_area()
     except:
         return 1
 
@@ -1257,7 +1257,7 @@ def create_document_page_image(doc, page_num, output_image_max_dim=1000):
         output_image_height = int(round(output_image_max_dim * page_height / page_width))
         
     mat = fitz.Matrix(zoom, zoom)
-    pix = page.getPixmap(matrix = mat, alpha = False)
+    pix = page.get_pixmap(matrix = mat, alpha = False)
     img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
     
     return img
@@ -1282,10 +1282,10 @@ def create_pascal_voc_page_element(image_filename, output_image_width, output_im
 
 
 def create_pascal_voc_object_element(class_name, bbox, page_bbox, output_image_max_dim=1000):
-    bbox_area = fitz.Rect(bbox).getArea()
+    bbox_area = fitz.Rect(bbox).get_area()
     if bbox_area == 0:
         raise Exception
-    intersect_area = fitz.Rect(page_bbox).intersect(fitz.Rect(bbox)).getArea()
+    intersect_area = fitz.Rect(page_bbox).intersect(fitz.Rect(bbox)).get_area()
     if abs(intersect_area - bbox_area) > 0.1:
         print(bbox)
         print(bbox_area)
@@ -1462,17 +1462,20 @@ def main():
             doc = fitz.open(pdf_filepath)
             page = doc[0]
 
-            page_words = doc[0].getTextWords()
+            page_words = doc[0].get_text_words()
+
+            if split == 'val' or split == 'test':
+                padding = 2
+            else:
+                padding = 30
 
             # For SciTSR, the table isn't always completely inside the PDF page
-            page_rect = page.MediaBox
+            page_rect = page.mediabox
             for word in page_words:
                 bbox = word[:4]
-                bbox = [bbox[0]-30, bbox[1]-30, bbox[2]+30, bbox[2]+30]
-                page_rect.includeRect(bbox)
-            page.setMediaBox(page_rect)
-            if not page.rect == page.MediaBox:
-                print("ERROR")
+                bbox = [bbox[0]-padding, bbox[1]-padding, bbox[2]+padding, bbox[2]+padding]
+                page_rect.include_rect(bbox)
+            page.set_mediabox(page_rect)
 
             img = create_document_page_image(doc, 0, output_image_max_dim=1000)           
 
@@ -1487,6 +1490,7 @@ def main():
 
             tables = [table_dict]
         except:
+            traceback.print_exc()
             continue
         
         document_tables = []
@@ -1704,19 +1708,19 @@ def main():
                     page_rect = list(doc[page_num].rect)
                     scale = output_image_max_dim / max(page_rect)
                     tokens = []
-                    for word_num, word in enumerate(doc[page_num].getTextWords()):
+                    for word_num, word in enumerate(doc[page_num].get_text_words()):
                         token = {}
                         token['flags'] = 0
                         token['span_num'] = word_num
                         token['line_num'] = 0
                         token['block_num'] = 0
                         bbox = [round(scale * v, 5) for v in word[:4]]
-                        if Rect(bbox).getArea() > 0 and overlap(bbox, page_rect) > 0.75:
+                        if Rect(bbox).get_area() > 0 and overlap(bbox, page_rect) > 0.75:
                             bbox = [max(0, bbox[0]),
                                     max(0, bbox[1]),
                                     min(page_rect[2], bbox[2]),
                                     min(page_rect[3], bbox[3])]
-                            if Rect(bbox).getArea() > 0:
+                            if Rect(bbox).get_area() > 0:
                                 token['bbox'] = bbox
                                 token['text'] = word[4]
                                 tokens.append(token)
@@ -1769,9 +1773,9 @@ def main():
                 column_rect = Rect()
                 row_rect = Rect()
                 for column_num in column_nums:
-                    column_rect.includeRect(columns[column_num]['pdf_column_bbox'])
+                    column_rect.include_rect(columns[column_num]['pdf_column_bbox'])
                 for row_num in row_nums:
-                    row_rect.includeRect(rows[row_num]['pdf_row_bbox'])
+                    row_rect.include_rect(rows[row_num]['pdf_row_bbox'])
                 cell_rect = column_rect.intersect(row_rect)
                 cell['pdf_bbox'] = list(cell_rect)
 
@@ -1790,9 +1794,9 @@ def main():
                     table_boxes.append(dict_entry)                     
 
                 if is_column_header:
-                    header_rect.includeRect(cell_bbox)
+                    header_rect.include_rect(cell_bbox)
 
-            if header_rect.getArea() > 0:
+            if header_rect.get_area() > 0:
                 dict_entry = {'class_label': 'table column header', 'bbox': list(header_rect)}
                 table_boxes.append(dict_entry)
 
@@ -1811,12 +1815,18 @@ def main():
 
             # Convert to image coordinates
             crop_bbox = [int(round(scale * elem)) for elem in table_bbox]
+
+            split = table_dict['split']
+            if split == 'val' or split == 'test':
+                padding = 2
+            else:
+                padding = 30
             
             # Pad
-            crop_bbox = [crop_bbox[0]-30,
-                        crop_bbox[1]-30,
-                        crop_bbox[2]+30,
-                        crop_bbox[3]+30]
+            crop_bbox = [crop_bbox[0]-padding,
+                        crop_bbox[1]-padding,
+                        crop_bbox[2]+padding,
+                        crop_bbox[3]+padding]
 
             # Keep within image
             crop_bbox = [max(0, crop_bbox[0]),
@@ -1859,7 +1869,7 @@ def main():
                 # Table words
                 # output_table_words_directory
                 tokens = []
-                for word_num, word in enumerate(doc[page_num].getTextWords()):
+                for word_num, word in enumerate(doc[page_num].get_text_words()):
                     token = {}
                     token['flags'] = 0
                     token['span_num'] = word_num
@@ -1871,7 +1881,7 @@ def main():
                                 max(0, bbox[1]-crop_bbox[1]-1),
                                 min(table_img.size[0], bbox[2]-crop_bbox[0]-1),
                                 min(table_img.size[1], bbox[3]-crop_bbox[1]-1)]
-                        if Rect(bbox).getArea() > 0:
+                        if Rect(bbox).get_area() > 0:
                             token['bbox'] = bbox
                             token['text'] = word[4]
                             tokens.append(token)
