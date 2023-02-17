@@ -1,24 +1,24 @@
+"""
+Copyright (C) 2023 Microsoft Corporation
+
+Assumes the data is in PASCAL VOC data format and the folder structure is:
+[data_directory]/
+- images/
+- train/
+- test/
+- val/
+"""
+
 import argparse
 import os
 import json
-from collections import defaultdict, Counter
+from collections import defaultdict
 import traceback
-from difflib import SequenceMatcher
-import statistics
-import random
 
-import fitz
-from fitz import Rect
 from PIL import Image
 from matplotlib import pyplot as plt
 import matplotlib.patches as patches
 import xml.etree.ElementTree as ET
-from xml.dom import minidom
-import pdf2image
-from pdf2image import convert_from_path
-from PyPDF2 import PdfFileReader
-import editdistance
-import numpy as np
 
 def read_pascal_voc(xml_file: str):
 
@@ -29,8 +29,6 @@ def read_pascal_voc(xml_file: str):
     labels = []
 
     for object_ in root.iter('object'):
-
-        filename = root.find('filename').text
 
         ymin, xmin, ymax, xmax = None, None, None, None
         
@@ -70,10 +68,11 @@ def get_args():
                         help="Root directory for source data to process")
     parser.add_argument('--words_data_dir',
                         help="Root directory for source data to process")
-    parser.add_argument('--split',
+    parser.add_argument('--split', default='',
                         help="Split to process")
     parser.add_argument('--output_dir',
                         help="Root directory for output data")
+    parser.add_argument('--num_samples', type=int)
     return parser.parse_args()
 
 def main():
@@ -83,36 +82,47 @@ def main():
     words_directory = args.words_data_dir
     split = args.split
     output_directory = args.output_dir
+    num_samples = args.num_samples
 
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
 
-    xml_filenames = os.listdir(os.path.join(data_directory, split))
+    xml_filenames = [elem for elem in os.listdir(os.path.join(data_directory, split)) if elem.endswith(".xml")]
 
-    for filename in xml_filenames:
+    for idx, filename in enumerate(xml_filenames):
+        if not num_samples is None and idx == num_samples:
+            break
         print(filename)
-        xml_filepath = os.path.join(data_directory, split, filename)
-        img_filepath = xml_filepath.replace(split, "images").replace(".xml", ".jpg")
-        words_filepath = os.path.join(words_directory, filename.replace(".xml", "_words.json"))
-        
-        bboxes, labels = read_pascal_voc(xml_filepath)
-        img = Image.open(img_filepath)
-        with open(words_filepath, 'r') as json_file:
-            words = json.load(json_file)
-        
-        ax = plt.gca()
-        ax.imshow(img)
-        for word in words:
-            plot_bbox(ax, word['bbox'], color="orange", linewidth=0.5, alpha=0.1)
-        for bbox, label in zip(bboxes, labels):
-            color, alpha, linewidth = color_map[label]
-            plot_bbox(ax, bbox, color=color, linewidth=linewidth, alpha=alpha)
-        fig = plt.gcf()
-        fig.set_size_inches((18, 18))
-        plt.axis('off')
-        plt.savefig('test.jpg', bbox_inches='tight', dpi=100)
-        plt.show()
-        plt.close()
+        try:
+            xml_filepath = os.path.join(data_directory, split, filename)
+            img_filepath = xml_filepath.replace(split, "images").replace(".xml", ".jpg")
+            words_filepath = os.path.join(words_directory, filename.replace(".xml", "_words.json"))
+            
+            bboxes, labels = read_pascal_voc(xml_filepath)
+            img = Image.open(img_filepath)
+            try:
+                with open(words_filepath, 'r') as json_file:
+                    words = json.load(json_file)
+            except:
+                words = []
+            
+            ax = plt.gca()
+            ax.imshow(img)
+            for word in words:
+                plot_bbox(ax, word['bbox'], color="orange", linewidth=0.5, alpha=0.1)
+            for bbox, label in zip(bboxes, labels):
+                color, alpha, linewidth = color_map[label]
+                plot_bbox(ax, bbox, color=color, linewidth=linewidth, alpha=alpha)
+            fig = plt.gcf()
+            fig.set_size_inches((18, 18))
+            plt.axis('off')
+            save_filepath = os.path.join(output_directory, filename.replace(".xml", "_ANNOTATIONS.jpg"))
+            plt.savefig(save_filepath, bbox_inches='tight', dpi=100)
+            plt.show()
+            plt.close()
+        except:
+            traceback.print_exc()
+            continue
 
 if __name__ == "__main__":
     main()
