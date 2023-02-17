@@ -1,6 +1,8 @@
 """
 Copyright (C) 2023 Microsoft Corporation
 
+Script to edit, filter, and canonicalize FinTabNet to align it with PubTables-1M.
+
 If you use this code in your published work, we request that you cite our papers
 and table-transformer GitHub repo.
 """
