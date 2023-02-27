@@ -3,6 +3,7 @@ import json
 import argparse
 import sys
 import xml.etree.ElementTree as ET
+import os
 
 import torch
 from torchvision import transforms
@@ -50,7 +51,14 @@ def get_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--image_dir',
-                        help="Data directory for images")
+                        help="Directory for input images")
+    parser.add_argument('--words_dir',
+                        help="Directory for input words")
+    parser.add_argument('--out_dir',
+                        help="Output directory")
+    parser.add_argument('--mode',
+                        help="The processing to apply to the input image and tokens",
+                        choices=['detect', 'recognize', 'extract'])
     parser.add_argument('--structure_config_path',
                         help="Filepath to the structure model config file")
     parser.add_argument('--structure_model_path', help="The path to the structure model")
@@ -59,10 +67,18 @@ def get_args():
     parser.add_argument('--detection_model_path', help="The path to the detection model")                       
     parser.add_argument('--detection_device', default="cuda")
     parser.add_argument('--structure_device', default="cuda")
-    parser.add_argument('--batch_size', type=int)
-    parser.add_argument('--num_workers', type=int)
-    parser.add_argument('--image_path',
-                        help="Image for testing")
+    parser.add_argument('--crops', '-p', action='store_true',
+                        help='Output cropped data from table detections')
+    parser.add_argument('--objects', '-o', action='store_true',
+                        help='Output objects')
+    parser.add_argument('--cells', '-l', action='store_true',
+                        help='Output cells list')
+    parser.add_argument('--html', '-m', action='store_true',
+                        help='Output HTML')
+    parser.add_argument('--csv', '-c', action='store_true',
+                        help='Output CSV')
+    parser.add_argument('--verbose', '-v', action='store_true',
+                        help='Verbose output')
 
     return parser.parse_args()
 
@@ -533,38 +549,51 @@ class TableExtractionPipeline(object):
             return
         return
 
-    def recognize(self, table_img, tokens=None, output="objects"):
+    def recognize(self, table_img, tokens=None, out_objects=False, out_cells=False,
+                  out_html=False, out_csv=False):
+        out_formats = {}
         if self.str_model is None:
             print("No structure model loaded.")
-            return
+            return out_formats
 
+        if not (out_objects or out_cells or out_html or out_csv):
+            print("No output format specified")
+            return out_formats
+
+        # Convert image to tensor and normalize
         img_tensor = normalize(table_img)
+
+        # Run input image through the model
         outputs = self.str_model([img_tensor.to(self.str_device)])
 
+        # Post-process detected objects, assign class labels
         objects = outputs_to_objects(outputs, table_img.size, self.str_class_idx2name)
+        if out_objects:
+            out_formats['objects'] = objects
+        if not (out_cells or out_html or out_csv):
+            return out_formats
 
-        if output == "objects":
-            return objects
-
+        # Further process the detected objects so they correspond to a consistent table 
         tables_structure = objects_to_structures(objects, tokens, self.str_class_thresholds)
 
+        # Enumerate all table cells: grid cells and spanning cells
         tables_cells = [structure_to_cells(structure, tokens)[0] for structure in tables_structure]
+        if out_cells:
+            out_formats['cells'] = tables_cells
+        if not (out_html or out_csv):
+            return out_formats
 
-        if output == "cells":
-            return tables_cells
-
-        #tables_data_frames = [cells_to_data_frame(cells) for cells in tables_cells]
-
-        if output == "html":
+        # Convert cells to HTML
+        if out_html:
             tables_htmls = [cells_to_html(cells) for cells in tables_cells]
-            return tables_htmls
+            out_formats['html'] = tables_htmls
 
-        # TODO: "Flatten" headers
-        if output == "csv":
+        # Convert cells to CSV, including flattening multi-row column headers to a single row 
+        if out_csv:
             tables_csvs = [cells_to_csv(cells) for cells in tables_cells]
-            return tables_csvs
+            out_formats['csv'] = tables_csvs
 
-        return
+        return out_formats
 
     def extract(self, page_image, page_tokens=None):
         return None
@@ -584,25 +613,29 @@ def main():
                                    str_config_path=args.structure_config_path, 
                                    str_model_path=args.structure_model_path)
 
-    img_path = args.image_path
-    img = Image.open(img_path)
-    print("Image loaded.")
-    img.save("test.jpg")
+    # Load images
+    img_files = os.listdir(args.image_dir)
+    num_files = len(img_files)
 
-    tokens_path = img_path.replace("images", "words").replace(".jpg", "_words.json")
-    with open(tokens_path, 'r') as f:
-        tokens = json.load(f)
+    for count, img_file in enumerate(img_files):
+        print("({}/{})".format(count+1, num_files))
+        img_path = os.path.join(args.image_dir, img_file)
+        img = Image.open(img_path)
+        print("Image loaded.")
 
-    #objects = pipe.recognize(img, tokens, output="objects")
-    #out = pipe.recognize(img, tokens, output="cells")
-    #out = pipe.recognize(img, tokens, output="html")
-    out = pipe.recognize(img, tokens, output="csv")
-    print("Table recognized.")
+        tokens_path = os.path.join(args.words_dir, img_file.replace(".jpg", "_words.json"))
+        with open(tokens_path, 'r') as f:
+            tokens = json.load(f)
 
-    #print(objects)
-    #print(cells)
-    for elem in out:
-        print(elem)
+        if args.mode == 'recognize':
+            out = pipe.recognize(img, tokens, out_objects=args.objects, out_cells=args.csv,
+                                out_html=args.html, out_csv=args.csv)
+            print("Table(s) recognized.")
+
+            if args.verbose:
+                for key, val in out.items():
+                    for elem in val:
+                        print(elem)
 
 if __name__ == "__main__":
     main()
