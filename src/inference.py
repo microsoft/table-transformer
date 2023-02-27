@@ -1,7 +1,8 @@
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 import json
 import argparse
 import sys
+import xml.etree.ElementTree as ET
 
 import torch
 from torchvision import transforms
@@ -220,10 +221,10 @@ def objects_to_structures(objects, tokens, class_thresholds):
         column_headers = [obj for obj in table_objects if obj['label'] == 'table column header']
         spanning_cells = [obj for obj in table_objects if obj['label'] == 'table spanning cell']
         for obj in spanning_cells:
-            obj['projected_row_header'] = False
+            obj['projected row header'] = False
         projected_row_headers = [obj for obj in table_objects if obj['label'] == 'table projected row header']
         for obj in projected_row_headers:
-            obj['projected_row_header'] = True
+            obj['projected row header'] = True
         spanning_cells += projected_row_headers
         for obj in rows:
             obj['column header'] = False
@@ -299,8 +300,8 @@ def structure_to_cells(table_structure, tokens):
             if cell['subcell']:
                 subcells.append(cell)
             else:
-                #cell_text = extract_text_inside_bbox(table_spans, cell['bbox'])
-                #cell['cell_text'] = cell_text
+                #cell text = extract_text_inside_bbox(table_spans, cell['bbox'])
+                #cell['cell text'] = cell text
                 cell['projected row header'] = False
                 cells.append(cell)
 
@@ -362,7 +363,7 @@ def structure_to_cells(table_structure, tokens):
         cell_spans = [tokens[num] for num in cell_span_nums]
         # TODO: Refine how text is extracted; should be character-based, not span-based;
         # but need to associate 
-        cell['cell_text'] = postprocess.extract_text_from_spans(cell_spans, remove_integer_superscripts=False)
+        cell['cell text'] = postprocess.extract_text_from_spans(cell_spans, remove_integer_superscripts=False)
         cell['spans'] = cell_spans
         
     # Adjust the row, column, and cell bounding boxes to reflect the extracted text
@@ -416,7 +417,7 @@ def structure_to_cells(table_structure, tokens):
 
     return cells, confidence_score
 
-def cells_to_data_frame(cells):
+def cells_to_csv(cells):
     if len(cells) > 0:
         num_columns = max([max(cell['column_nums']) for cell in cells]) + 1
         num_rows = max([max(cell['row_nums']) for cell in cells]) + 1
@@ -425,24 +426,54 @@ def cells_to_data_frame(cells):
 
     header_cells = [cell for cell in cells if cell['column header']]
     if len(header_cells) > 0:
-        max_row = max([max(cell['row_nums']) for cell in header_cells])
-        min_row = min([min(cell['row_nums']) for cell in header_cells])
-        num_header_rows = max_row - min_row + 1
+        max_header_row = max([max(cell['row_nums']) for cell in header_cells])
     else:
-        num_header_rows = 0
+        max_header_row = -1
 
     table_array = np.empty([num_rows, num_columns], dtype="object")
     if len(cells) > 0:
-        body_array = np.empty([num_rows, num_columns], dtype="object")
         for cell in cells:
             for row_num in cell['row_nums']:
                 for column_num in cell['column_nums']:
-                    table_array[row_num, column_num] = cell["cell_text"]
+                    table_array[row_num, column_num] = cell["cell text"]
 
-    columns=table_array[:num_header_rows,:]
-    df = pd.DataFrame(table_array[num_header_rows:,:], index=None)
+    header = table_array[:max_header_row+1,:]
+    flattened_header = []
+    for col in header.transpose():
+        flattened_header.append(' | '.join(OrderedDict.fromkeys(col)))
+    df = pd.DataFrame(table_array[max_header_row+1:,:], index=None, columns=flattened_header)
 
-    return df
+    return df.to_csv(index=None)
+
+def cells_to_html(cells):
+    cells = sorted(cells, key=lambda k: min(k['column_nums']))
+    cells = sorted(cells, key=lambda k: min(k['row_nums']))
+
+    table = ET.Element("table")
+    current_row = -1
+
+    for cell in cells:
+        this_row = min(cell['row_nums'])
+
+        attrib = {}
+        colspan = len(cell['column_nums'])
+        if colspan > 1:
+            attrib['colspan'] = str(colspan)
+        rowspan = len(cell['row_nums'])
+        if rowspan > 1:
+            attrib['rowspan'] = str(rowspan)
+        if this_row > current_row:
+            current_row = this_row
+            if cell['column header']:
+                cell_tag = "th"
+                row = ET.SubElement(table, "thead")
+            else:
+                cell_tag = "td"
+                row = ET.SubElement(table, "tr")
+        tcell = ET.SubElement(row, cell_tag, attrib=attrib)
+        tcell.text = cell['cell text']
+
+    return ET.tostring(table)
 
 class TableExtractionPipeline(object):
     def __init__(self, det_device=None, str_device=None,
@@ -522,14 +553,16 @@ class TableExtractionPipeline(object):
         if output == "cells":
             return tables_cells
 
-        tables_data_frames = [cells_to_data_frame(cells) for cells in tables_cells]
+        #tables_data_frames = [cells_to_data_frame(cells) for cells in tables_cells]
 
         if output == "html":
-            return [df.to_html(index=False) for df in tables_data_frames]
+            tables_htmls = [cells_to_html(cells) for cells in tables_cells]
+            return tables_htmls
 
         # TODO: "Flatten" headers
         if output == "csv":
-            return [df.to_csv(index=False) for df in tables_data_frames]
+            tables_csvs = [cells_to_csv(cells) for cells in tables_cells]
+            return tables_csvs
 
         return
 
@@ -561,13 +594,15 @@ def main():
         tokens = json.load(f)
 
     #objects = pipe.recognize(img, tokens, output="objects")
-    #cells = pipe.recognize(img, tokens, output="cells")
-    html = pipe.recognize(img, tokens, output="html")
+    #out = pipe.recognize(img, tokens, output="cells")
+    #out = pipe.recognize(img, tokens, output="html")
+    out = pipe.recognize(img, tokens, output="csv")
     print("Table recognized.")
 
     #print(objects)
     #print(cells)
-    print(html)
+    for elem in out:
+        print(elem)
 
 if __name__ == "__main__":
     main()
