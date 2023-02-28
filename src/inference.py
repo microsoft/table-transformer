@@ -4,6 +4,8 @@ import argparse
 import sys
 import xml.etree.ElementTree as ET
 import os
+import random
+import io
 
 import torch
 from torchvision import transforms
@@ -11,13 +13,37 @@ from PIL import Image
 from fitz import Rect
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from matplotlib.patches import Patch
 
 from main import get_model
 import postprocess
 sys.path.append("../detr")
 from models import build_model
 
-normalize = transforms.Compose([
+class MaxResize(object):
+    def __init__(self, max_size=800):
+        self.max_size = max_size
+
+    def __call__(self, image):
+        width, height = image.size
+        current_max_size = max(width, height)
+        scale = self.max_size / current_max_size
+        resized_image = image.resize((int(round(scale*width)), int(round(scale*height))))
+        
+        return resized_image
+
+detection_transform = transforms.Compose([
+    MaxResize(1000),
+    transforms.ToTensor(),
+    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+])
+
+structure_transform = transforms.Compose([
+    MaxResize(800),
     transforms.ToTensor(),
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
@@ -79,6 +105,8 @@ def get_args():
                         help='Output CSV')
     parser.add_argument('--verbose', '-v', action='store_true',
                         help='Verbose output')
+    parser.add_argument('--visualize', '-z', action='store_true',
+                        help='Visualize output')
 
     return parser.parse_args()
 
@@ -211,7 +239,8 @@ def outputs_to_objects(outputs, img_size, class_idx2name):
     for label, score, bbox in zip(pred_labels, pred_scores, pred_bboxes):
         class_label = class_idx2name[int(label)]
         if not class_label == 'no object':
-            objects.append({'label': class_label, 'score': score, 'bbox': bbox})
+            objects.append({'label': class_label, 'score': float(score),
+                            'bbox': [float(elem) for elem in bbox]})
 
     return objects
 
@@ -489,7 +518,62 @@ def cells_to_html(cells):
         tcell = ET.SubElement(row, cell_tag, attrib=attrib)
         tcell.text = cell['cell text']
 
-    return ET.tostring(table)
+    return str(ET.tostring(table, encoding="unicode"))
+
+def visualize_cells(img, cells):
+    plt.imshow(img, interpolation="lanczos")
+    plt.gcf().set_size_inches(20, 20)
+    ax = plt.gca()
+    
+    for cell in cells:
+        bbox = cell['bbox']
+
+        if cell['column header']:
+            facecolor = (1, 0, 0.45)
+            edgecolor = (1, 0, 0.45)
+            alpha = 0.3
+            linewidth = 2
+            hatch='//////'
+        elif cell['projected row header']:
+            facecolor = (0.95, 0.6, 0.1)
+            edgecolor = (0.95, 0.6, 0.1)
+            alpha = 0.3
+            linewidth = 2
+            hatch='//////'
+        else:
+            facecolor = (0.3, 0.74, 0.8)
+            edgecolor = (0.3, 0.7, 0.6)
+            alpha = 0.3
+            linewidth = 2
+            hatch='\\\\\\\\\\\\'
+ 
+        rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=linewidth, 
+                                    edgecolor='none',facecolor=facecolor, alpha=0.1)
+        ax.add_patch(rect)
+        rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=linewidth, 
+                                    edgecolor=edgecolor,facecolor='none',linestyle='-', alpha=alpha)
+        ax.add_patch(rect)
+        rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=0, 
+                                    edgecolor=edgecolor,facecolor='none',linestyle='-', hatch=hatch, alpha=0.2)
+        ax.add_patch(rect)
+
+    plt.xticks([], [])
+    plt.yticks([], [])
+
+    legend_elements = [Patch(facecolor=(0.3, 0.74, 0.8), edgecolor=(0.3, 0.7, 0.6),
+                                label='Data cell', hatch='\\\\\\\\\\\\', alpha=0.3),
+                        Patch(facecolor=(1, 0, 0.45), edgecolor=(1, 0, 0.45),
+                                label='Column header cell', hatch='//////', alpha=0.3),
+                        Patch(facecolor=(0.95, 0.6, 0.1), edgecolor=(0.95, 0.6, 0.1),
+                                label='Projected row header cell', hatch='//////', alpha=0.3)]
+    plt.legend(handles=legend_elements, bbox_to_anchor=(0.5, -0.02), loc='upper center', borderaxespad=0,
+                    fontsize=10, ncol=3)  
+    plt.gcf().set_size_inches(10, 10)
+    plt.axis('off')
+    plt.show()
+    plt.close()
+
+    return
 
 class TableExtractionPipeline(object):
     def __init__(self, det_device=None, str_device=None,
@@ -549,7 +633,7 @@ class TableExtractionPipeline(object):
             return
         return
 
-    def recognize(self, table_img, tokens=None, out_objects=False, out_cells=False,
+    def recognize(self, img, tokens=None, out_objects=False, out_cells=False,
                   out_html=False, out_csv=False):
         out_formats = {}
         if self.str_model is None:
@@ -560,14 +644,14 @@ class TableExtractionPipeline(object):
             print("No output format specified")
             return out_formats
 
-        # Convert image to tensor and normalize
-        img_tensor = normalize(table_img)
+        # Transform the image how the model expects it
+        img_tensor = structure_transform(img)
 
         # Run input image through the model
         outputs = self.str_model([img_tensor.to(self.str_device)])
 
         # Post-process detected objects, assign class labels
-        objects = outputs_to_objects(outputs, table_img.size, self.str_class_idx2name)
+        objects = outputs_to_objects(outputs, img.size, self.str_class_idx2name)
         if out_objects:
             out_formats['objects'] = objects
         if not (out_cells or out_html or out_csv):
@@ -616,6 +700,7 @@ def main():
     # Load images
     img_files = os.listdir(args.image_dir)
     num_files = len(img_files)
+    random.shuffle(img_files)
 
     for count, img_file in enumerate(img_files):
         print("({}/{})".format(count+1, num_files))
@@ -632,10 +717,35 @@ def main():
                                 out_html=args.html, out_csv=args.csv)
             print("Table(s) recognized.")
 
+            for key, val in out.items():
+                if key == 'objects':
+                    if args.verbose:
+                        print(val)
+                    out_file = img_file.replace(".jpg", "_objects.json")
+                    with open(os.path.join(args.out_dir, out_file), 'w') as f:
+                        json.dump(val, f)
+                else:
+                    for idx, elem in enumerate(val):
+                        if args.verbose:
+                            print(elem)
+                        if key == 'cells':
+                            out_file = img_file.replace(".jpg", "_{}_objects.json".format(idx))
+                            with open(os.path.join(args.out_dir, out_file), 'w') as f:
+                                json.dump(elem, f)
+                        else:
+                            out_file = img_file.replace(".jpg", "_{}.{}".format(idx, key))
+                            with open(os.path.join(args.out_dir, out_file), 'w') as f:
+                                f.write(elem)
+
             if args.verbose:
                 for key, val in out.items():
                     for elem in val:
                         print(elem)
+
+            if args.visualize:
+                if 'cells' in out:
+                    for cells in out['cells']:
+                        visualize_cells(img, cells)
 
 if __name__ == "__main__":
     main()
