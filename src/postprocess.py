@@ -144,28 +144,36 @@ def objects_to_table_structures(table_object, objects_in_table, tokens_in_table,
     return table_structures
 
 
-def refine_rows(rows, page_spans, score_threshold):
+def refine_rows(rows, tokens, score_threshold):
     """
     Apply operations to the detected rows, such as
     thresholding, NMS, and alignment.
     """
 
-    rows = nms_by_containment(rows, page_spans, overlap_threshold=0.5)
-    remove_objects_without_content(page_spans, rows)
+    if len(tokens) > 0:
+        rows = nms_by_containment(rows, tokens, overlap_threshold=0.5)
+        remove_objects_without_content(tokens, rows)
+    else:
+        rows = nms(rows, match_criteria="object2_overlap",
+                   match_threshold=0.5, keep_higher=True)
     if len(rows) > 1:
         rows = sort_objects_top_to_bottom(rows)
 
     return rows
 
 
-def refine_columns(columns, page_spans, score_threshold):
+def refine_columns(columns, tokens, score_threshold):
     """
     Apply operations to the detected columns, such as
     thresholding, NMS, and alignment.
     """
 
-    columns = nms_by_containment(columns, page_spans, overlap_threshold=0.5)
-    remove_objects_without_content(page_spans, columns)
+    if len(tokens) > 0:
+        columns = nms_by_containment(columns, tokens, overlap_threshold=0.5)
+        remove_objects_without_content(tokens, columns)
+    else:
+        columns = nms(columns, match_criteria="object2_overlap",
+                   match_threshold=0.25, keep_higher=True)
     if len(columns) > 1:
         columns = sort_objects_left_to_right(columns)
 
@@ -430,7 +438,7 @@ def refine_table_structures(table_bbox, table_structures, page_spans, class_thre
     return table_structures
 
 
-def nms(objects, match_criteria="object2_overlap", match_threshold=0.05, keep_metric="score", keep_higher=True):
+def nms(objects, match_criteria="object2_overlap", match_threshold=0.05, keep_higher=True):
     """
     A customizable version of non-maxima suppression (NMS).
     
@@ -440,16 +448,12 @@ def nms(objects, match_criteria="object2_overlap", match_threshold=0.05, keep_me
     objects: set of dicts; each object dict must have a 'bbox' and a 'score' field
     match_criteria: how to measure how much two objects "overlap"
     match_threshold: the cutoff for determining that overlap requires suppression of one object
-    keep_metric: which metric to use to determine the object to keep
     keep_higher: if True, keep the object with the higher metric; otherwise, keep the lower
     """
     if len(objects) == 0:
         return []
 
-    if keep_metric=="score":
-        objects = sort_objects_by_score(objects, reverse=keep_higher)
-    elif keep_metric=="area":
-        objects = sort_objects_by_area(objects, reverse=keep_higher)
+    objects = sort_objects_by_score(objects, reverse=keep_higher)
 
     num_objects = len(objects)
     suppression = [False for obj in objects]

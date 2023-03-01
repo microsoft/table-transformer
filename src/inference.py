@@ -188,16 +188,13 @@ def align_headers(headers, rows):
     return aligned_headers
 
 
-def refine_table_structure(table_bbox, table_structure, tokens, class_thresholds):
+def refine_table_structure(table_structure, class_thresholds):
     """
     Apply operations to the detected table structure objects such as
     thresholding, NMS, and alignment.
     """
     rows = table_structure["rows"]
     columns = table_structure['columns']
-
-    #columns = fill_column_gaps(columns, table_bbox)
-    #rows = fill_row_gaps(rows, table_bbox)
 
     # Process the headers
     column_headers = table_structure['column headers']
@@ -302,8 +299,7 @@ def objects_to_structures(objects, tokens, class_thresholds):
         structure['spanning cells'] = spanning_cells
 
         if len(rows) > 0 and len(columns) > 1:
-            structure = refine_table_structure(table['bbox'], structure,
-                                                 table_tokens, class_thresholds)
+            structure = refine_table_structure(structure, class_thresholds)
 
         table_structures.append(structure)
 
@@ -515,10 +511,14 @@ def cells_to_html(cells):
             else:
                 cell_tag = "td"
                 row = ET.SubElement(table, "tr")
+        attrib['xmin'] = "{0:.3f}".format(cell['bbox'][0])
+        attrib['ymin'] = "{0:.3f}".format(cell['bbox'][1])
+        attrib['xmax'] = "{0:.3f}".format(cell['bbox'][2])
+        attrib['ymax'] = "{0:.3f}".format(cell['bbox'][3])
         tcell = ET.SubElement(row, cell_tag, attrib=attrib)
         tcell.text = cell['cell text']
 
-    return str(ET.tostring(table, encoding="unicode"))
+    return str(ET.tostring(table, encoding="unicode", short_empty_elements=False))
 
 def visualize_cells(img, cells):
     plt.imshow(img, interpolation="lanczos")
@@ -708,9 +708,12 @@ def main():
         img = Image.open(img_path)
         print("Image loaded.")
 
-        tokens_path = os.path.join(args.words_dir, img_file.replace(".jpg", "_words.json"))
-        with open(tokens_path, 'r') as f:
-            tokens = json.load(f)
+        if not args.words_dir is None:
+            tokens_path = os.path.join(args.words_dir, img_file.replace(".jpg", "_words.json"))
+            with open(tokens_path, 'r') as f:
+                tokens = json.load(f)
+        else:
+            tokens = []
 
         if args.mode == 'recognize':
             out = pipe.recognize(img, tokens, out_objects=args.objects, out_cells=args.csv,
