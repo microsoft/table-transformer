@@ -1,14 +1,35 @@
-# PubTables-1M
+# Table Transformer (TATR)
 
-This repository contains code and links to data for the papers:
-- ["PubTables-1M: Towards comprehensive table extraction from unstructured documents"](https://openaccess.thecvf.com/content/CVPR2022/html/Smock_PubTables-1M_Towards_Comprehensive_Table_Extraction_From_Unstructured_Documents_CVPR_2022_paper.html)
-- ["GriTS: Grid table similarity metric for table structure recognition"](https://arxiv.org/pdf/2203.12555.pdf)
+A deep learning model based on object detection for extracting tables from PDFs and images.
 
-*Note: Updates to the code and papers (and documentation) are currently ongoing and we will announce when each of these is ready for a stable release.*
-
-The goal of PubTables-1M is to create a large, detailed, high-quality dataset for training and evaluating a wide variety of models for the tasks of **table detection**, **table structure recognition**, and **functional analysis**.
+First proposed in ["PubTables-1M: Towards comprehensive table extraction from unstructured documents"](https://openaccess.thecvf.com/content/CVPR2022/html/Smock_PubTables-1M_Towards_Comprehensive_Table_Extraction_From_Unstructured_Documents_CVPR_2022_paper.html).
 
 ![table_extraction_v2](https://user-images.githubusercontent.com/10793386/139559159-cd23c972-8731-48ed-91df-f3f27e9f4d79.jpg)
+
+This repository also contains the official code for these papers:
+- ["GriTS: Grid table similarity metric for table structure recognition"](https://arxiv.org/abs/2203.12555)
+- ["Aligning benchmark datasets for table structure recognition"](https://arxiv.org/abs/2303.00716)
+
+Note: If you are looking to use Table Transformer to extract your own tables, here are some helpful things to know:
+- TATR can be trained to work well across many document domains and everything needed to train your own model is included here. But at the moment pre-trained model weights are only available for TATR trained on the PubTables-1M dataset. (See the additional documentation for how to train your own multi-domain model.)
+- TATR is an object detection model that recognizes tables from image input. The inference code built on TATR needs text extraction (from OCR or directly from PDF) as a separate input in order to include text in its HTML or CSV output.
+
+Additional information about this project for both users and researchers, including data, training, evaluation, and inference code is provided below.
+
+## News
+`03/01/2023`: New paper "Aligning benchmark datasets for table structure recognition" is now available on [arXiv](https://arxiv.org/abs/2303.00716).\
+`11/25/2022`: We have made the full PubTables-1M dataset alternatively available for download from [Hugging Face](https://huggingface.co/datasets/bsmock/pubtables-1m).\
+`05/05/2022`: We have released the pre-trained weights for the table structure recognition model trained on PubTables-1M.\
+`03/23/2022`: Our paper "GriTS: Grid table similarity metric for table structure recognition" is now available on [arXiv](https://arxiv.org/abs/2203.12555)\
+`03/04/2022`: We have released the pre-trained weights for the table detection model trained on PubTables-1M.\
+`03/03/2022`: "PubTables-1M: Towards comprehensive table extraction from unstructured documents" has been accepted at [CVPR 2022](https://cvpr2022.thecvf.com/).\
+`11/21/2021`: Our updated paper "PubTables-1M: Towards comprehensive table extraction from unstructured documents" is available on [arXiv](https://arxiv.org/pdf/2110.00061.pdf).\
+`10/21/2021`: The full PubTables-1M dataset has been officially released on [Microsoft Research Open Data](https://msropendata.com/datasets/505fcbe3-1383-42b1-913a-f651b8b712d3).\
+`06/08/2021`: Initial version of the Table Transformer (TATR) project is released.
+
+# PubTables-1M
+
+The goal of PubTables-1M is to create a large, detailed, high-quality dataset for training and evaluating a wide variety of models for the tasks of **table detection**, **table structure recognition**, and **functional analysis**.
 
 It contains:
 - 575,305 annotated document pages containing tables for table detection.
@@ -19,16 +40,6 @@ It contains:
 - Additional cell properties not used in the current model training.
 
 Additionally, cells in the headers are *canonicalized* and we implement multiple *quality control* steps to ensure the annotations are as free of noise as possible. For more details, please see [our paper](https://arxiv.org/pdf/2110.00061.pdf).
-
-## News
-`11/25/2022`: We have also made [the full PubTables-1M dataset](https://huggingface.co/datasets/bsmock/pubtables-1m) available for download from Hugging Face.\
-`05/05/2022`: We have released the pre-trained weights for the table structure recognition model trained on PubTables-1M.\
-`03/23/2022`: Our paper "GriTS: Grid table similarity metric for table structure recognition" is now available on [arXiv](https://arxiv.org/pdf/2203.12555.pdf)\
-`03/04/2022`: We have released the pre-trained weights for the table detection model trained on PubTables-1M.\
-`03/03/2022`: "PubTables-1M: Towards comprehensive table extraction from unstructured documents" has been accepted at [CVPR 2022](https://cvpr2022.thecvf.com/).\
-`11/21/2021`: Our updated paper "PubTables-1M: Towards comprehensive table extraction from unstructured documents" is available on [arXiv](https://arxiv.org/pdf/2110.00061.pdf).\
-`10/21/2021`: The full PubTables-1M dataset has been officially released on [Microsoft Research Open Data](https://msropendata.com/datasets/505fcbe3-1383-42b1-913a-f651b8b712d3).\
-`06/08/2021`: Initial version of the table-transformer project is released.
 
 ## Model Weights
 We provide the pre-trained models for table detection and table structure recognition trained for 20 epochs on PubTables-1M.
