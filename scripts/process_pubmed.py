@@ -1301,8 +1301,8 @@ def get_args():
                         help="Root directory for output data")
     parser.add_argument('--verbose', action='store_true')
     parser.add_argument('--timeout_seconds', type=int, default=90)
-    parser.add_argument('--det_ds_name', default='My-PubTables-Detection')
-    parser.add_argument('--str_ds_name', default='My-PubTables-Structure')
+    parser.add_argument('--det_db_name', default='My-PubTables-Detection')
+    parser.add_argument('--str_db_name', default='My-PubTables-Structure')
     return parser.parse_args()
 
 
@@ -1311,13 +1311,21 @@ def main():
 
     source_directory = args.data_dir
     timeout_seconds = args.timeout_seconds
-    detection_ds_name = args.det_ds_name
-    structure_ds_name = args.str_ds_name
+    detection_db_name = args.det_db_name
+    structure_db_name = args.str_db_name
     VERBOSE = args.verbose
 
-    output_directory = args.output_dir # location where to save data
-    if not os.path.exists(output_directory):
-        os.makedirs(output_directory)
+    output_directory = args.output_dir # root location where to save data
+    det_xml_dir = os.path.join(output_directory, detection_db_name, "unsplit_xml")
+    det_img_dir = os.path.join(output_directory, detection_db_name, "images")
+    str_xml_dir = os.path.join(output_directory, structure_db_name, "unsplit_xml")
+    str_img_dir = os.path.join(output_directory, structure_db_name, "images")
+    pdf_annot_dir = os.path.join(output_directory, "My-PubTables-PDF-Annotations")
+
+    dirs = [det_xml_dir, det_img_dir, str_xml_dir, str_img_dir, pdf_annot_dir]
+    for di in dirs:
+        if not os.path.exists(di):
+            os.makedirs(di)
 
     '''
     Get a list of all PDF-XML document pairs
@@ -1336,6 +1344,7 @@ def main():
                 pdf_files_by_pmc_id[pmc_id] = elem
     else:
         dirs = os.listdir(source_directory)
+        print(dirs)
         for d in dirs:
             if d.startswith("PMC"):
                 dir_path = os.path.join(source_directory, d)
@@ -1381,7 +1390,7 @@ def main():
         
         pmc_id = pdf_file.split("/")[0]
         split = "train" # fix this: split_by_pmc_id[pmc_id]
-        save_filepath = os.path.join(output_directory, pmc_id + "_tables.json")
+        save_filepath = os.path.join(pdf_annot_dir, pmc_id + "_tables.json")
         
         print(pdf_file)
         pdf_path = os.path.join(source_directory, pdf_file)
@@ -1655,13 +1664,13 @@ def main():
 
                         # Create page image            
                         image_filename = pmc_id + "_" + str(page_num) + ".jpg"
-                        image_filepath = os.path.join(output_directory, image_filename)
+                        image_filepath = os.path.join(det_img_dir, image_filename)
                         img = create_document_page_image(doc, page_num, output_image_max_dim=output_image_max_dim)
                         img.save(image_filepath)
 
                         # Initialize PASCAL VOC XML
                         page_annotation = create_pascal_voc_page_element(image_filename, img.width, img.height,
-                                                                        database=detection_ds_name)
+                                                                        database=detection_db_name)
 
                         for entry in boxes:
                             # Add to PASCAl VOC
@@ -1671,7 +1680,7 @@ def main():
                             page_annotation.append(element)   
                             
                         xml_filename = pmc_id + "_" + str(page_num) + ".xml"
-                        xml_filepath = os.path.join(output_directory, xml_filename)
+                        xml_filepath = os.path.join(det_xml_dir, xml_filename)
                         save_xml_pascal_voc(page_annotation, xml_filepath)
                     except Exception as err:
                         print(traceback.format_exc())
@@ -1788,7 +1797,7 @@ def main():
 
                 # Get page image            
                 page_image_filename = pmc_id + "_" + str(page_num) + ".jpg"
-                page_image_filepath = os.path.join(output_directory, page_image_filename)
+                page_image_filepath = os.path.join(det_img_dir, page_image_filename)
                 if os.path.exists(page_image_filepath):
                     img = Image.open(page_image_filepath)
                 else:
@@ -1832,10 +1841,10 @@ def main():
                 
                 # Initialize PASCAL VOC XML
                 table_image_filename = pmc_id + "_table_" + str(table_num) + ".jpg"
-                table_image_filepath = os.path.join(output_directory, table_image_filename)
+                table_image_filepath = os.path.join(str_img_dir, table_image_filename)
                 table_annotation = create_pascal_voc_page_element(table_image_filename,
                                                                  img.width, img.height,
-                                                                 database=structure_ds_name)
+                                                                 database=structure_db_name)
 
                 for entry in table_boxes:
                     bbox = entry['bbox']
@@ -1848,7 +1857,7 @@ def main():
                 img.save(table_image_filepath)
 
                 xml_filename = pmc_id + "_table_" + str(table_num) + ".xml"
-                xml_filepath = os.path.join(output_directory, xml_filename)
+                xml_filepath = os.path.join(str_xml_dir, xml_filename)
                 if VERBOSE: print(xml_filepath)
                 save_xml_pascal_voc(table_annotation, xml_filepath)
                 table_image_count += 1
