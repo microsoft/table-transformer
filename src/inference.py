@@ -63,6 +63,12 @@ def get_class_map(data_type):
         class_map = {'table': 0, 'table rotated': 1, 'no object': 2}
     return class_map
 
+detection_class_thresholds = {
+    "table": 0.5,
+    "table rotated": 0.5,
+    "no object": 10
+}
+
 structure_class_thresholds = {
     "table": 0.5,
     "table column": 0.5,
@@ -240,6 +246,36 @@ def outputs_to_objects(outputs, img_size, class_idx2name):
                             'bbox': [float(elem) for elem in bbox]})
 
     return objects
+
+def objects_to_crops(img, tokens, objects, class_thresholds, padding=2):
+    """
+    Process the bounding boxes produced by the table detection model into
+    cropped table images and cropped tokens.
+    """
+
+    table_crops = []
+    for obj in objects:
+        if obj['score'] < class_thresholds[obj['label']]:
+            continue
+
+        cropped_table = {}
+
+        bbox = obj['bbox']
+        bbox = [bbox[0]-padding, bbox[1]-padding, bbox[2]+padding, bbox[3]+padding]
+
+        cropped_img = img.crop(bbox)
+        cropped_table['image'] = cropped_img
+
+        table_tokens = [token for token in tokens if iob(token['bbox'], bbox) >= 0.5]
+        cropped_table_tokens = [[token[0]-bbox[0],
+                                 token[1]-bbox[1],
+                                 token[2]-bbox[0],
+                                 token[3]-bbox[1]] for token in table_tokens]
+        cropped_table['tokens'] = cropped_table_tokens
+
+        table_crops.append(cropped_table)
+
+    return table_crops
 
 def objects_to_structures(objects, tokens, class_thresholds):
     """
@@ -586,6 +622,7 @@ class TableExtractionPipeline(object):
 
         self.det_class_name2idx = get_class_map('detection')
         self.det_class_idx2name = {v:k for k, v in self.det_class_name2idx.items()}
+        self.det_class_thresholds = detection_class_thresholds
 
         self.str_class_name2idx = get_class_map('structure')
         self.str_class_idx2name = {v:k for k, v in self.str_class_name2idx.items()}
@@ -627,7 +664,7 @@ class TableExtractionPipeline(object):
     def __call__(self, page_image, page_tokens=None):
         return self.extract(self, page_image, page_tokens)
 
-    def detect(self, img, tokens=None, out_objects=True):
+    def detect(self, img, tokens=None, out_objects=True, out_crops=False):
         out_formats = {}
         if self.det_model is None:
             print("No detection model loaded.")
@@ -643,8 +680,15 @@ class TableExtractionPipeline(object):
         objects = outputs_to_objects(outputs, img.size, self.det_class_idx2name)
         if out_objects:
             out_formats['objects'] = objects
+        if not out_crops:
+            return out_formats
 
-        return objects
+        # Crop image and tokens for detected table
+        if out_crops:
+            tables_crops = objects_to_crops(img, tokens, objects, self.det_class_thresholds)
+            out_formats['crops'] = tables_crops
+
+        return out_formats
 
     def recognize(self, img, tokens=None, out_objects=False, out_cells=False,
                   out_html=False, out_csv=False):
@@ -762,6 +806,28 @@ def main():
                 if 'cells' in out:
                     for cells in out['cells']:
                         visualize_cells(img, cells)
+
+        if args.mode == 'detect':
+            out = pipe.detect(img, tokens, out_objects=args.objects, out_crops=args.crops)
+            print("Table(s) detected.")
+
+            for key, val in out.items():
+                if key == 'objects':
+                    if args.verbose:
+                        print(val)
+                    out_file = img_file.replace(".jpg", "_objects.json")
+                    with open(os.path.join(args.out_dir, out_file), 'w') as f:
+                        json.dump(val, f)
+
+                if key == 'crops':
+                    for idx, cropped_table in enumerate(val):
+                        out_img_file = img_file.replace(".jpg", "_table_{}.jpg".format(idx))
+                        cropped_table['image'].save(os.path.join(args.out_dir,
+                                                                 out_img_file))
+
+                        out_words_file = out_img_file.replace(".jpg", "_words.json")
+                        with open(os.path.join(args.out_dir, out_words_file), 'w') as f:
+                            json.dump(cropped_table['tokens'], f)
 
 if __name__ == "__main__":
     main()
