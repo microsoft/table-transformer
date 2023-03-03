@@ -627,11 +627,24 @@ class TableExtractionPipeline(object):
     def __call__(self, page_image, page_tokens=None):
         return self.extract(self, page_image, page_tokens)
 
-    def detect(self, page_image, page_tokens=None):
+    def detect(self, img, tokens=None, out_objects=True):
+        out_formats = {}
         if self.det_model is None:
             print("No detection model loaded.")
-            return
-        return
+            return out_formats
+
+        # Transform the image how the model expects it
+        img_tensor = detection_transform(img)
+
+        # Run input image through the model
+        outputs = self.det_model([img_tensor.to(self.det_device)])
+
+        # Post-process detected objects, assign class labels
+        objects = outputs_to_objects(outputs, img.size, self.det_class_idx2name)
+        if out_objects:
+            out_formats['objects'] = objects
+
+        return objects
 
     def recognize(self, img, tokens=None, out_objects=False, out_cells=False,
                   out_html=False, out_csv=False):
