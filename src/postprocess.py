@@ -317,6 +317,8 @@ def extract_text_from_spans(spans, join_with_space=True, remove_integer_superscr
     
     if remove_integer_superscripts:
         for span in spans:
+            if not 'flags' in span:
+                continue
             flags = span['flags']
             if flags & 2**0: # superscript flag
                 if is_int(span['text']):

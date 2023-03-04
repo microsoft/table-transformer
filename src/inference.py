@@ -267,11 +267,12 @@ def objects_to_crops(img, tokens, objects, class_thresholds, padding=2):
         cropped_table['image'] = cropped_img
 
         table_tokens = [token for token in tokens if iob(token['bbox'], bbox) >= 0.5]
-        cropped_table_tokens = [{'bbox': [token['bbox'][0]-bbox[0],
-                                 token['bbox'][1]-bbox[1],
-                                 token['bbox'][2]-bbox[0],
-                                 token['bbox'][3]-bbox[1]], 'text': token['text']} for token in table_tokens]
-        cropped_table['tokens'] = cropped_table_tokens
+        for token in table_tokens:
+            token['bbox'] = [token['bbox'][0]-bbox[0],
+                             token['bbox'][1]-bbox[1],
+                             token['bbox'][2]-bbox[0],
+                             token['bbox'][3]-bbox[1]]
+        cropped_table['tokens'] = table_tokens
 
         table_crops.append(cropped_table)
 
