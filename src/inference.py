@@ -180,7 +180,7 @@ def align_headers(headers, rows):
         if row_num == last_row_num + 1:
             row = rows[row_num]
             row['column header'] = True
-            header_rect = header_rect.includeRect(row['bbox'])
+            header_rect = header_rect.include_rect(row['bbox'])
             last_row_num = row_num
         else:
             # Break as soon as a non-header row is encountered.
@@ -318,10 +318,10 @@ def objects_to_structures(objects, tokens, class_thresholds):
         # and the total width of the columns
         row_rect = Rect()
         for obj in rows:
-            row_rect.includeRect(obj['bbox'])
+            row_rect.include_rect(obj['bbox'])
         column_rect = Rect() 
         for obj in columns:
-            column_rect.includeRect(obj['bbox'])
+            column_rect.include_rect(obj['bbox'])
         table['row_column_bbox'] = [column_rect[0], row_rect[1], column_rect[2], row_rect[3]]
         table['bbox'] = table['row_column_bbox']
 
@@ -396,7 +396,7 @@ def structure_to_cells(table_structure, tokens):
                 if cell_rect is None:
                     cell_rect = Rect(list(subcell['bbox']))
                 else:
-                    cell_rect.includeRect(Rect(list(subcell['bbox'])))
+                    cell_rect.include_rect(Rect(list(subcell['bbox'])))
                 cell_rows = cell_rows.union(set(subcell['row_nums']))
                 cell_columns = cell_columns.union(set(subcell['column_nums']))
                 # By convention here, all subcells must be classified
@@ -426,10 +426,10 @@ def structure_to_cells(table_structure, tokens):
     for cell in cells:
         column_rect = Rect()
         for column_num in cell['column_nums']:
-            column_rect.includeRect(list(dilated_columns[column_num]['bbox']))
+            column_rect.include_rect(list(dilated_columns[column_num]['bbox']))
         row_rect = Rect()
         for row_num in cell['row_nums']:
-            row_rect.includeRect(list(dilated_rows[row_num]['bbox']))
+            row_rect.include_rect(list(dilated_rows[row_num]['bbox']))
         cell_rect = column_rect.intersect(row_rect)
         cell['bbox'] = list(cell_rect)
 
@@ -484,9 +484,9 @@ def structure_to_cells(table_structure, tokens):
         row_rect = Rect()
         column_rect = Rect()
         for row_num in cell['row_nums']:
-            row_rect.includeRect(list(rows[row_num]['bbox']))
+            row_rect.include_rect(list(rows[row_num]['bbox']))
         for column_num in cell['column_nums']:
-            column_rect.includeRect(list(columns[column_num]['bbox']))
+            column_rect.include_rect(list(columns[column_num]['bbox']))
         cell_rect = row_rect.intersect(column_rect)
         if cell_rect.get_area() > 0:
             cell['bbox'] = list(cell_rect)
@@ -744,6 +744,9 @@ def main():
     args = get_args()
     print(args.__dict__)
     print('-' * 100)
+
+    if not args.out_dir is None and not os.path.exists(args.out_dir):
+        os.makedirs(args.out_dir)
 
     # Create inference pipeline
     print("Creating inference pipeline")

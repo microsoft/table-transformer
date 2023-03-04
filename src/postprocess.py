@@ -36,11 +36,11 @@ def iou(bbox1, bbox2):
     Compute the intersection-over-union of two bounding boxes.
     """
     intersection = Rect(bbox1).intersect(bbox2)
-    union = Rect(bbox1).includeRect(bbox2)
+    union = Rect(bbox1).include_rect(bbox2)
     
-    union_area = union.getArea()
+    union_area = union.get_area()
     if union_area > 0:
-        return intersection.getArea() / union.getArea()
+        return intersection.get_area() / union.get_area()
     
     return 0
 
@@ -51,9 +51,9 @@ def iob(bbox1, bbox2):
     """
     intersection = Rect(bbox1).intersect(bbox2)
     
-    bbox1_area = Rect(bbox1).getArea()
+    bbox1_area = Rect(bbox1).get_area()
     if bbox1_area > 0:
-        return intersection.getArea() / bbox1_area
+        return intersection.get_area() / bbox1_area
     
     return 0
 
@@ -122,10 +122,10 @@ def objects_to_table_structures(table_object, objects_in_table, tokens_in_table,
     # and the total width of the columns
     row_rect = Rect()
     for obj in rows:
-        row_rect.includeRect(obj['bbox'])
+        row_rect.include_rect(obj['bbox'])
     column_rect = Rect() 
     for obj in columns:
-        column_rect.includeRect(obj['bbox'])
+        column_rect.include_rect(obj['bbox'])
     table_object['row_column_bbox'] = [column_rect[0], row_rect[1], column_rect[2], row_rect[3]]
     table_object['bbox'] = table_object['row_column_bbox']
 
@@ -222,10 +222,10 @@ def slot_into_containers(container_objects, package_objects, overlap_threshold=0
     for package_num, package in enumerate(package_objects):
         match_scores = []
         package_rect = Rect(package['bbox'])
-        package_area = package_rect.getArea()        
+        package_area = package_rect.get_area()        
         for container_num, container in enumerate(container_objects):
             container_rect = Rect(container['bbox'])
-            intersect_area = container_rect.intersect(package['bbox']).getArea()
+            intersect_area = container_rect.intersect(package['bbox']).get_area()
             overlap_fraction = intersect_area / package_area
             match_scores.append({'container': container, 'container_num': container_num, 'score': overlap_fraction})
 
@@ -298,10 +298,10 @@ def overlaps(bbox1, bbox2, threshold=0.5):
     Test if more than "threshold" fraction of bbox1 overlaps with bbox2.
     """
     rect1 = Rect(list(bbox1))
-    area1 = rect1.getArea()
+    area1 = rect1.get_area()
     if area1 == 0:
         return False
-    return rect1.intersect(list(bbox2)).getArea()/area1 >= threshold
+    return rect1.intersect(list(bbox2)).get_area()/area1 >= threshold
 
 
 def extract_text_from_spans(spans, join_with_space=True, remove_integer_superscripts=True):
@@ -460,12 +460,12 @@ def nms(objects, match_criteria="object2_overlap", match_threshold=0.05, keep_hi
 
     for object2_num in range(1, num_objects):
         object2_rect = Rect(objects[object2_num]['bbox'])
-        object2_area = object2_rect.getArea()
+        object2_area = object2_rect.get_area()
         for object1_num in range(object2_num):
             if not suppression[object1_num]:
                 object1_rect = Rect(objects[object1_num]['bbox'])
-                object1_area = object1_rect.getArea()
-                intersect_area = object1_rect.intersect(object2_rect).getArea()
+                object1_area = object1_rect.get_area()
+                intersect_area = object1_rect.intersect(object2_rect).get_area()
                 try:
                     if match_criteria=="object1_overlap":
                         metric = intersect_area / object1_area
@@ -519,7 +519,7 @@ def align_headers(headers, rows):
         if row_num == last_row_num + 1:
             row = rows[row_num]
             row['header'] = True
-            header_rect = header_rect.includeRect(row['bbox'])
+            header_rect = header_rect.include_rect(row['bbox'])
             last_row_num = row_num
         else:
             # Break as soon as a non-header row is encountered.
@@ -582,7 +582,7 @@ def align_supercells(supercells, rows, columns):
             if row_bbox_rect is None:
                 row_bbox_rect = Rect(rows[row_num]['bbox'])
             else:
-                row_bbox_rect = row_bbox_rect.includeRect(rows[row_num]['bbox'])
+                row_bbox_rect = row_bbox_rect.include_rect(rows[row_num]['bbox'])
         if row_bbox_rect is None:
             continue
 
@@ -606,7 +606,7 @@ def align_supercells(supercells, rows, columns):
                 if col_bbox_rect is None:
                     col_bbox_rect = Rect(col['bbox'])
                 else:
-                    col_bbox_rect = col_bbox_rect.includeRect(col['bbox'])
+                    col_bbox_rect = col_bbox_rect.include_rect(col['bbox'])
         if col_bbox_rect is None:
             continue
 
@@ -715,8 +715,8 @@ def table_structure_to_cells(table_structures, table_spans, table_bbox):
             cell['subcell'] = False
             for supercell in supercells:
                 supercell_rect = Rect(list(supercell['bbox']))
-                if (supercell_rect.intersect(cell_rect).getArea()
-                        / cell_rect.getArea()) > 0.5:
+                if (supercell_rect.intersect(cell_rect).get_area()
+                        / cell_rect.get_area()) > 0.5:
                     cell['subcell'] = True
                     break
 
@@ -736,13 +736,13 @@ def table_structure_to_cells(table_structures, table_spans, table_bbox):
         header = True
         for subcell in subcells:
             subcell_rect = Rect(list(subcell['bbox']))
-            subcell_rect_area = subcell_rect.getArea()
-            if (subcell_rect.intersect(supercell_rect).getArea()
+            subcell_rect_area = subcell_rect.get_area()
+            if (subcell_rect.intersect(supercell_rect).get_area()
                     / subcell_rect_area) > 0.5:
                 if cell_rect is None:
                     cell_rect = Rect(list(subcell['bbox']))
                 else:
-                    cell_rect.includeRect(Rect(list(subcell['bbox'])))
+                    cell_rect.include_rect(Rect(list(subcell['bbox'])))
                 cell_rows = cell_rows.union(set(subcell['row_nums']))
                 cell_columns = cell_columns.union(set(subcell['column_nums']))
                 # By convention here, all subcells must be classified
@@ -772,10 +772,10 @@ def table_structure_to_cells(table_structures, table_spans, table_bbox):
     for cell in cells:
         column_rect = Rect()
         for column_num in cell['column_nums']:
-            column_rect.includeRect(list(dilated_columns[column_num]['bbox']))
+            column_rect.include_rect(list(dilated_columns[column_num]['bbox']))
         row_rect = Rect()
         for row_num in cell['row_nums']:
-            row_rect.includeRect(list(dilated_rows[row_num]['bbox']))
+            row_rect.include_rect(list(dilated_rows[row_num]['bbox']))
         cell_rect = column_rect.intersect(row_rect)
         cell['bbox'] = list(cell_rect)
 
@@ -830,11 +830,11 @@ def table_structure_to_cells(table_structures, table_spans, table_bbox):
         row_rect = Rect()
         column_rect = Rect()
         for row_num in cell['row_nums']:
-            row_rect.includeRect(list(rows[row_num]['bbox']))
+            row_rect.include_rect(list(rows[row_num]['bbox']))
         for column_num in cell['column_nums']:
-            column_rect.includeRect(list(columns[column_num]['bbox']))
+            column_rect.include_rect(list(columns[column_num]['bbox']))
         cell_rect = row_rect.intersect(column_rect)
-        if cell_rect.getArea() > 0:
+        if cell_rect.get_area() > 0:
             cell['bbox'] = list(cell_rect)
             pass
 
