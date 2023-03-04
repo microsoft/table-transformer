@@ -2,20 +2,18 @@
 Copyright (C) 2023 Microsoft Corporation
 
 USAGE NOTES:
-This code is currently our best attempt to piece together the code that was used to create PubTables-1M.
+This code is our best attempt to piece together the code that was used to create PubTables-1M.
+(PubTables-1M was originally created in multiple stages, not all in one script.)
 
-It processes pairs of PDF and NXML files in the PubMed Open Access corpus.
+This script processes pairs of PDF and NXML files in the PubMed Open Access corpus.
+These need to be downloaded first.
 
-We have not verified yet that it completely works.
-
-We are still refining it to make it easier to use.
-
-There is no guarantee we finish refining this code. Praise motivates.
-
-You are free to fix/modify this code for your own purpose.
-
-If you use this code in your published work, we request that you cite our PubTables-1M paper
+If you use this code in your published work, we ask that you please cite our PubTables-1M paper
 and table-transformer GitHub repo.
+
+TODO:
+- Add code for making or incorporating a train/test/val split
+- Change the table padding for the test and val splits
 """
 
 import os
@@ -1318,11 +1316,14 @@ def main():
     output_directory = args.output_dir # root location where to save data
     det_xml_dir = os.path.join(output_directory, detection_db_name, "unsplit_xml")
     det_img_dir = os.path.join(output_directory, detection_db_name, "images")
+    det_words_dir = os.path.join(output_directory, detection_db_name, "words")
     str_xml_dir = os.path.join(output_directory, structure_db_name, "unsplit_xml")
     str_img_dir = os.path.join(output_directory, structure_db_name, "images")
+    str_words_dir = os.path.join(output_directory, structure_db_name, "words")
     pdf_annot_dir = os.path.join(output_directory, "My-PubTables-PDF-Annotations")
 
-    dirs = [det_xml_dir, det_img_dir, str_xml_dir, str_img_dir, pdf_annot_dir]
+    dirs = [det_xml_dir, det_img_dir, det_words_dir,
+            str_xml_dir, str_img_dir, str_words_dir, pdf_annot_dir]
     for di in dirs:
         if not os.path.exists(di):
             os.makedirs(di)
@@ -1682,6 +1683,13 @@ def main():
                         xml_filename = pmc_id + "_" + str(page_num) + ".xml"
                         xml_filepath = os.path.join(det_xml_dir, xml_filename)
                         save_xml_pascal_voc(page_annotation, xml_filepath)
+
+                        page_words_filename = xml_filename.replace(".xml", "_words.json")
+                        page_words_filepath = os.path.join(det_words_dir, page_words_filename)
+
+                        page_words = get_page_words(doc[page_num])
+                        with open(page_words_filepath, 'w') as f:
+                            json.dump(page_words, f)
                     except Exception as err:
                         print(traceback.format_exc())
 
@@ -1860,6 +1868,34 @@ def main():
                 xml_filepath = os.path.join(str_xml_dir, xml_filename)
                 if VERBOSE: print(xml_filepath)
                 save_xml_pascal_voc(table_annotation, xml_filepath)
+
+                table_words_filename = xml_filename.replace(".xml", "_words.json")
+                table_words_filepath = os.path.join(str_words_dir, table_words_filename)
+
+                page_words = get_page_words(doc[page_num])
+                table_words = []
+                for word_num, word in enumerate(page_words):
+                    token = {}
+                    token['flags'] = 0
+                    token['span_num'] = word_num
+                    token['line_num'] = 0
+                    token['block_num'] = 0
+                    bbox = [round(zoom * v, 5) for v in word['bbox']]
+                    if iob(bbox, crop_bbox) > 0.75:
+                        bbox = [max(0, bbox[0]-crop_bbox[0]-1),
+                                max(0, bbox[1]-crop_bbox[1]-1),
+                                min(img.size[0], bbox[2]-crop_bbox[0]-1),
+                                min(img.size[1], bbox[3]-crop_bbox[1]-1)]
+                        if (bbox[0] < 0 or bbox[1] < 0 or bbox[2] > img.size[0] or bbox[3] > img.size[1]
+                            or bbox[0] > bbox[2] or bbox[1] > bbox[3]):
+                            bad_box = True
+                        else:
+                            token['bbox'] = bbox
+                            token['text'] = word['text']
+                            table_words.append(token)
+                with open(table_words_filepath, 'w') as f:
+                    json.dump(table_words, f)
+
                 table_image_count += 1
                 if VERBOSE: print("STRUCTURE SAMPLE SAVED!")
             except KeyboardInterrupt:
