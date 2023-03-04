@@ -1687,7 +1687,11 @@ def main():
                         page_words_filename = xml_filename.replace(".xml", "_words.json")
                         page_words_filepath = os.path.join(det_words_dir, page_words_filename)
 
-                        page_words = get_page_words(doc[page_num])
+                        page = doc[page_num]
+                        page_words = get_page_words(page)
+                        zoom = 1000 / max(page.rect)
+                        for word in page_words:
+                            word['bbox'] = [zoom*elem for elem in word['bbox']]
                         with open(page_words_filepath, 'w') as f:
                             json.dump(page_words, f)
                     except Exception as err:
