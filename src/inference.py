@@ -137,9 +137,9 @@ def iob(bbox1, bbox2):
     """
     intersection = Rect(bbox1).intersect(bbox2)
     
-    bbox1_area = Rect(bbox1).getArea()
+    bbox1_area = Rect(bbox1).get_area()
     if bbox1_area > 0:
-        return intersection.getArea() / bbox1_area
+        return intersection.get_area() / bbox1_area
     
     return 0
 
@@ -267,10 +267,10 @@ def objects_to_crops(img, tokens, objects, class_thresholds, padding=2):
         cropped_table['image'] = cropped_img
 
         table_tokens = [token for token in tokens if iob(token['bbox'], bbox) >= 0.5]
-        cropped_table_tokens = [[token[0]-bbox[0],
-                                 token[1]-bbox[1],
-                                 token[2]-bbox[0],
-                                 token[3]-bbox[1]] for token in table_tokens]
+        cropped_table_tokens = [{'bbox': [token['bbox'][0]-bbox[0],
+                                 token['bbox'][1]-bbox[1],
+                                 token['bbox'][2]-bbox[0],
+                                 token['bbox'][3]-bbox[1]], 'text': token['text']} for token in table_tokens]
         cropped_table['tokens'] = cropped_table_tokens
 
         table_crops.append(cropped_table)
@@ -369,8 +369,8 @@ def structure_to_cells(table_structure, tokens):
             cell['subcell'] = False
             for spanning_cell in spanning_cells:
                 spanning_cell_rect = Rect(list(spanning_cell['bbox']))
-                if (spanning_cell_rect.intersect(cell_rect).getArea()
-                        / cell_rect.getArea()) > 0.5:
+                if (spanning_cell_rect.intersect(cell_rect).get_area()
+                        / cell_rect.get_area()) > 0.5:
                     cell['subcell'] = True
                     break
 
@@ -390,8 +390,8 @@ def structure_to_cells(table_structure, tokens):
         header = True
         for subcell in subcells:
             subcell_rect = Rect(list(subcell['bbox']))
-            subcell_rect_area = subcell_rect.getArea()
-            if (subcell_rect.intersect(spanning_cell_rect).getArea()
+            subcell_rect_area = subcell_rect.get_area()
+            if (subcell_rect.intersect(spanning_cell_rect).get_area()
                     / subcell_rect_area) > 0.5:
                 if cell_rect is None:
                     cell_rect = Rect(list(subcell['bbox']))
@@ -488,7 +488,7 @@ def structure_to_cells(table_structure, tokens):
         for column_num in cell['column_nums']:
             column_rect.includeRect(list(columns[column_num]['bbox']))
         cell_rect = row_rect.intersect(column_rect)
-        if cell_rect.getArea() > 0:
+        if cell_rect.get_area() > 0:
             cell['bbox'] = list(cell_rect)
             pass
 
