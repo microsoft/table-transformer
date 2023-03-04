@@ -737,8 +737,22 @@ class TableExtractionPipeline(object):
 
         return out_formats
 
-    def extract(self, page_image, page_tokens=None):
-        return None
+    def extract(self, img, tokens=None, out_objects=True, out_crops=False, out_cells=False,
+                out_html=False, out_csv=False):
+
+        out = self.detect(img, tokens=tokens, out_objects=False, out_crops=True)
+        tables = out['crops']
+
+        out = []
+        for table in tables:
+            img = table['image']
+            tokens = table['tokens']
+
+            table_out = self.recognize(img, tokens=tokens, out_objects=out_objects,
+                                       out_cells=out_cells, out_html=out_html, out_csv=out_csv)
+            out.append(table_out)
+
+        return out
 
 
 def main():
@@ -832,6 +846,11 @@ def main():
                         out_words_file = out_img_file.replace(".jpg", "_words.json")
                         with open(os.path.join(args.out_dir, out_words_file), 'w') as f:
                             json.dump(cropped_table['tokens'], f)
+
+        if args.mode == 'extract':
+            out = pipe.extract(img, tokens, out_objects=args.objects, out_cells=args.csv,
+                              out_html=args.html, out_csv=args.csv)
+            print("Table(s) extracted.")
 
 if __name__ == "__main__":
     main()
