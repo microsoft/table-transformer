@@ -811,7 +811,7 @@ class TableExtractionPipeline(object):
 
             extracted_table = self.recognize(img, tokens=tokens, out_objects=out_objects,
                                        out_cells=out_cells, out_html=out_html, out_csv=out_csv)
-            extracted_table['img'] = img
+            extracted_table['image'] = img
             extracted_table['tokens'] = tokens
             extracted_tables.append(extracted_table)
 
@@ -827,7 +827,7 @@ def output_result(key, val, args, img, img_file):
             json.dump(val, f)
         if args.visualize:
             visualize_detected_tables(img, val)
-    elif not key == 'img' and not key == 'tokens':
+    elif not key == 'image' and not key == 'tokens':
         for idx, elem in enumerate(val):
             if key == 'crops':
                 for idx, cropped_table in enumerate(val):
@@ -925,7 +925,7 @@ def main():
 
             for table_idx, extracted_table in enumerate(extracted_tables):
                 for key, val in extracted_table.items():
-                    output_result(key, val, args, extracted_table['img'],
+                    output_result(key, val, args, extracted_table['image'],
                                   img_file.replace('.jpg', '_{}.jpg'.format(table_idx)))
 
 if __name__ == "__main__":
