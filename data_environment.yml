@@ -1,0 +1,14 @@
+name: tables-data
+channels:
+ - conda-forge
+ - defaults
+dependencies:
+  - python=3.10.9
+  - pip=23.0
+  - tqdm=4.64.1
+  - cython=0.29.33
+  - numpy=1.24.1
+  - editdistance=0.6.2
+  - Pillow=9.4.0
+  - pip:
+    - PyMuPDF==1.21.1
