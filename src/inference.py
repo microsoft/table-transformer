@@ -247,7 +247,7 @@ def outputs_to_objects(outputs, img_size, class_idx2name):
 
     return objects
 
-def objects_to_crops(img, tokens, objects, class_thresholds, padding=2):
+def objects_to_crops(img, tokens, objects, class_thresholds, padding=10):
     """
     Process the bounding boxes produced by the table detection model into
     cropped table images and cropped tokens.
@@ -264,7 +264,6 @@ def objects_to_crops(img, tokens, objects, class_thresholds, padding=2):
         bbox = [bbox[0]-padding, bbox[1]-padding, bbox[2]+padding, bbox[3]+padding]
 
         cropped_img = img.crop(bbox)
-        cropped_table['image'] = cropped_img
 
         table_tokens = [token for token in tokens if iob(token['bbox'], bbox) >= 0.5]
         for token in table_tokens:
@@ -272,6 +271,19 @@ def objects_to_crops(img, tokens, objects, class_thresholds, padding=2):
                              token['bbox'][1]-bbox[1],
                              token['bbox'][2]-bbox[0],
                              token['bbox'][3]-bbox[1]]
+
+        # If table is predicted to be rotated, rotate cropped image and tokens/words:
+        if obj['label'] == 'table rotated':
+            cropped_img = cropped_img.rotate(270, expand=True)
+            for token in table_tokens:
+                bbox = token['bbox']
+                bbox = [cropped_img.size[0]-bbox[3]-1,
+                        bbox[0],
+                        cropped_img.size[0]-bbox[1]-1,
+                        bbox[2]]
+                token['bbox'] = bbox
+
+        cropped_table['image'] = cropped_img
         cropped_table['tokens'] = table_tokens
 
         table_crops.append(cropped_table)
@@ -557,6 +569,56 @@ def cells_to_html(cells):
 
     return str(ET.tostring(table, encoding="unicode", short_empty_elements=False))
 
+def visualize_detected_tables(img, det_tables):
+    plt.imshow(img, interpolation="lanczos")
+    plt.gcf().set_size_inches(20, 20)
+    ax = plt.gca()
+    
+    for det_table in det_tables:
+        bbox = det_table['bbox']
+
+        if det_table['label'] == 'table':
+            facecolor = (1, 0, 0.45)
+            edgecolor = (1, 0, 0.45)
+            alpha = 0.3
+            linewidth = 2
+            hatch='//////'
+        elif det_table['label'] == 'table rotated':
+            facecolor = (0.95, 0.6, 0.1)
+            edgecolor = (0.95, 0.6, 0.1)
+            alpha = 0.3
+            linewidth = 2
+            hatch='//////'
+        else:
+            print(det_table)
+            continue
+ 
+        rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=linewidth, 
+                                    edgecolor='none',facecolor=facecolor, alpha=0.1)
+        ax.add_patch(rect)
+        rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=linewidth, 
+                                    edgecolor=edgecolor,facecolor='none',linestyle='-', alpha=alpha)
+        ax.add_patch(rect)
+        rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=0, 
+                                    edgecolor=edgecolor,facecolor='none',linestyle='-', hatch=hatch, alpha=0.2)
+        ax.add_patch(rect)
+
+    plt.xticks([], [])
+    plt.yticks([], [])
+
+    legend_elements = [Patch(facecolor=(1, 0, 0.45), edgecolor=(1, 0, 0.45),
+                                label='Table', hatch='//////', alpha=0.3),
+                        Patch(facecolor=(0.95, 0.6, 0.1), edgecolor=(0.95, 0.6, 0.1),
+                                label='Table (rotated)', hatch='//////', alpha=0.3)]
+    plt.legend(handles=legend_elements, bbox_to_anchor=(0.5, -0.02), loc='upper center', borderaxespad=0,
+                    fontsize=10, ncol=2)  
+    plt.gcf().set_size_inches(10, 10)
+    plt.axis('off')
+    plt.show()
+    plt.close()
+
+    return
+
 def visualize_cells(img, cells):
     plt.imshow(img, interpolation="lanczos")
     plt.gcf().set_size_inches(20, 20)
@@ -740,19 +802,21 @@ class TableExtractionPipeline(object):
     def extract(self, img, tokens=None, out_objects=True, out_crops=False, out_cells=False,
                 out_html=False, out_csv=False):
 
-        out = self.detect(img, tokens=tokens, out_objects=False, out_crops=True)
-        tables = out['crops']
+        detect_out = self.detect(img, tokens=tokens, out_objects=False, out_crops=True)
+        cropped_tables = detect_out['crops']
 
-        out = []
-        for table in tables:
+        extracted_tables = []
+        for table in cropped_tables:
             img = table['image']
             tokens = table['tokens']
 
-            table_out = self.recognize(img, tokens=tokens, out_objects=out_objects,
+            extracted_table = self.recognize(img, tokens=tokens, out_objects=out_objects,
                                        out_cells=out_cells, out_html=out_html, out_csv=out_csv)
-            out.append(table_out)
+            extracted_table['img'] = img
+            extracted_table['tokens'] = tokens
+            extracted_tables.append(extracted_table)
 
-        return out
+        return extracted_tables
 
 
 def main():
@@ -787,6 +851,21 @@ def main():
             tokens_path = os.path.join(args.words_dir, img_file.replace(".jpg", "_words.json"))
             with open(tokens_path, 'r') as f:
                 tokens = json.load(f)
+
+                # Handle dictionary format
+                if type(tokens) is dict and 'words' in tokens:
+                    tokens = tokens['words']
+
+                # 'tokens' is a list of tokens
+                # Need to be in a relative reading order
+                # If no order is provided, use current order
+                for idx, token in enumerate(tokens):
+                    if not 'span_num' in token:
+                        token['span_num'] = idx
+                    if not 'line_num' in token:
+                        token['line_num'] = 0
+                    if not 'block_num' in token:
+                        token['block_num'] = 0
         else:
             tokens = []
 
@@ -836,6 +915,8 @@ def main():
                     out_file = img_file.replace(".jpg", "_objects.json")
                     with open(os.path.join(args.out_dir, out_file), 'w') as f:
                         json.dump(val, f)
+                    if args.visualize:
+                        visualize_detected_tables(img, val)
 
                 if key == 'crops':
                     for idx, cropped_table in enumerate(val):
@@ -848,9 +929,33 @@ def main():
                             json.dump(cropped_table['tokens'], f)
 
         if args.mode == 'extract':
-            out = pipe.extract(img, tokens, out_objects=args.objects, out_cells=args.csv,
+            img.save(os.path.join(args.out_dir, img_file))
+            all_out = pipe.extract(img, tokens, out_objects=args.objects, out_cells=args.csv,
                               out_html=args.html, out_csv=args.csv)
             print("Table(s) extracted.")
+
+            for table_idx, out in enumerate(all_out):
+                for key, val in out.items():
+                    if key == 'objects':
+                        if args.verbose:
+                            print(val)
+                        out_file = img_file.replace(".jpg", "_objects.json")
+                        with open(os.path.join(args.out_dir, out_file), 'w') as f:
+                            json.dump(val, f)
+                    elif not key == 'img' and not key == 'tokens':
+                        for idx, elem in enumerate(val):
+                            if args.verbose:
+                                print(elem)
+                            if key == 'cells':
+                                out_file = img_file.replace(".jpg", "_{}_{}_objects.json".format(table_idx, idx))
+                                with open(os.path.join(args.out_dir, out_file), 'w') as f:
+                                    json.dump(elem, f)
+                                if args.visualize:
+                                    visualize_cells(out['img'], elem)
+                            else:
+                                out_file = img_file.replace(".jpg", "_{}_{}.{}".format(table_idx, idx, key))
+                                with open(os.path.join(args.out_dir, out_file), 'w') as f:
+                                    f.write(elem)
 
 if __name__ == "__main__":
     main()
