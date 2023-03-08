@@ -1,9 +1,13 @@
 # Inference
 
 With the Table Transformer (TATR) inference pipeline you can:
-1. *Detect* all tables in a document image
-2. *Recognize* a table in a cropped table image and output to HTML or CSV (and other formats)
-3. *Extract* (detect and recognize) all tables in a document image in a single step
+1. *Detect* all tables in a document image.
+2. *Recognize* the structure of a table in a cropped table image and output to HTML or CSV (and other formats).
+3. *Extract* (detect and recognize) all tables in a document image in a single step.
+
+Recognized/extracted tables can be output in multiple formats: 1. raw object bounding boxes; 2. list of cells, with properties; 3. HTML; 4. CSV.
+
+Of these, the list of cells (#2) contains the most information, as it includes the bounding box of every cell. The HTML table format is somewhat lossy because it does not include bounding box information for the cells. The CSV format is slightly more lossy in that the first row and only the first row contains the column headers/names. So multi-row column headers must be "flattened" into a single row.
 
 ## Sample Code
 Converting a cropped table image to HTML or CSV:
@@ -25,7 +29,10 @@ cells = extracted_table['cells']
 csv = extracted_table['csv']
 html = extracted_table['html']
 ```
+
 ## Model Files
+To run the pipelines, you need to provide config and model checkpoint files.
+
 For table detection you need:
 1. A detection model config JSON file
 2. A pre-trained detection model checkpoint file
@@ -37,7 +44,7 @@ For table structure recognition you need:
 For end-to-end table extraction you need all four of the above files.
 
 
-## Expected Formats
+## Pipeline Input Formats
 When running the sample code:
 - `img` is expected to be of type `PIL.Image`.
 - `tokens` is expected to be a list of dictionaries
@@ -57,7 +64,7 @@ When running the sample code:
 ```
 where `bbox` is in `[xmin, ymin, xmax, ymax]` format.
 ## Running From the Command Line
-Change directory:
+Change to `src` directory:
 ```
 cd src
 ```
