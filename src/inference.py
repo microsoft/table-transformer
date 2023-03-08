@@ -590,7 +590,6 @@ def visualize_detected_tables(img, det_tables):
             linewidth = 2
             hatch='//////'
         else:
-            print(det_table)
             continue
  
         rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=linewidth, 
@@ -819,6 +818,41 @@ class TableExtractionPipeline(object):
         return extracted_tables
 
 
+def output_result(key, val, args, img, img_file):
+    if key == 'objects':
+        if args.verbose:
+            print(val)
+        out_file = img_file.replace(".jpg", "_objects.json")
+        with open(os.path.join(args.out_dir, out_file), 'w') as f:
+            json.dump(val, f)
+        if args.visualize:
+            visualize_detected_tables(img, val)
+    elif not key == 'img' and not key == 'tokens':
+        for idx, elem in enumerate(val):
+            if key == 'crops':
+                for idx, cropped_table in enumerate(val):
+                    out_img_file = img_file.replace(".jpg", "_table_{}.jpg".format(idx))
+                    cropped_table['image'].save(os.path.join(args.out_dir,
+                                                                out_img_file))
+                    out_words_file = out_img_file.replace(".jpg", "_words.json")
+                    with open(os.path.join(args.out_dir, out_words_file), 'w') as f:
+                        json.dump(cropped_table['tokens'], f)
+            elif key == 'cells':
+                out_file = img_file.replace(".jpg", "_{}_objects.json".format(idx))
+                with open(os.path.join(args.out_dir, out_file), 'w') as f:
+                    json.dump(elem, f)
+                if args.verbose:
+                    print(elem)
+                if args.visualize:
+                    visualize_cells(img, elem)
+            else:
+                out_file = img_file.replace(".jpg", "_{}.{}".format(idx, key))
+                with open(os.path.join(args.out_dir, out_file), 'w') as f:
+                    f.write(elem)
+                if args.verbose:
+                    print(elem)
+                        
+
 def main():
     args = get_args()
     print(args.__dict__)
@@ -870,92 +904,29 @@ def main():
             tokens = []
 
         if args.mode == 'recognize':
-            out = pipe.recognize(img, tokens, out_objects=args.objects, out_cells=args.csv,
+            extracted_table = pipe.recognize(img, tokens, out_objects=args.objects, out_cells=args.csv,
                                 out_html=args.html, out_csv=args.csv)
             print("Table(s) recognized.")
 
-            for key, val in out.items():
-                if key == 'objects':
-                    if args.verbose:
-                        print(val)
-                    out_file = img_file.replace(".jpg", "_objects.json")
-                    with open(os.path.join(args.out_dir, out_file), 'w') as f:
-                        json.dump(val, f)
-                else:
-                    for idx, elem in enumerate(val):
-                        if args.verbose:
-                            print(elem)
-                        if key == 'cells':
-                            out_file = img_file.replace(".jpg", "_{}_objects.json".format(idx))
-                            with open(os.path.join(args.out_dir, out_file), 'w') as f:
-                                json.dump(elem, f)
-                        else:
-                            out_file = img_file.replace(".jpg", "_{}.{}".format(idx, key))
-                            with open(os.path.join(args.out_dir, out_file), 'w') as f:
-                                f.write(elem)
-
-            if args.verbose:
-                for key, val in out.items():
-                    for elem in val:
-                        print(elem)
-
-            if args.visualize:
-                if 'cells' in out:
-                    for cells in out['cells']:
-                        visualize_cells(img, cells)
+            for key, val in extracted_table.items():
+                output_result(key, val, args, img, img_file)
 
         if args.mode == 'detect':
-            out = pipe.detect(img, tokens, out_objects=args.objects, out_crops=args.crops)
+            detected_tables = pipe.detect(img, tokens, out_objects=args.objects, out_crops=args.crops)
             print("Table(s) detected.")
 
-            for key, val in out.items():
-                if key == 'objects':
-                    if args.verbose:
-                        print(val)
-                    out_file = img_file.replace(".jpg", "_objects.json")
-                    with open(os.path.join(args.out_dir, out_file), 'w') as f:
-                        json.dump(val, f)
-                    if args.visualize:
-                        visualize_detected_tables(img, val)
-
-                if key == 'crops':
-                    for idx, cropped_table in enumerate(val):
-                        out_img_file = img_file.replace(".jpg", "_table_{}.jpg".format(idx))
-                        cropped_table['image'].save(os.path.join(args.out_dir,
-                                                                 out_img_file))
-
-                        out_words_file = out_img_file.replace(".jpg", "_words.json")
-                        with open(os.path.join(args.out_dir, out_words_file), 'w') as f:
-                            json.dump(cropped_table['tokens'], f)
+            for key, val in detected_tables.items():
+                output_result(key, val, args, img, img_file)
 
         if args.mode == 'extract':
-            img.save(os.path.join(args.out_dir, img_file))
-            all_out = pipe.extract(img, tokens, out_objects=args.objects, out_cells=args.csv,
-                              out_html=args.html, out_csv=args.csv)
+            extracted_tables = pipe.extract(img, tokens, out_objects=args.objects, out_cells=args.csv,
+                                            out_html=args.html, out_csv=args.csv)
             print("Table(s) extracted.")
 
-            for table_idx, out in enumerate(all_out):
-                for key, val in out.items():
-                    if key == 'objects':
-                        if args.verbose:
-                            print(val)
-                        out_file = img_file.replace(".jpg", "_objects.json")
-                        with open(os.path.join(args.out_dir, out_file), 'w') as f:
-                            json.dump(val, f)
-                    elif not key == 'img' and not key == 'tokens':
-                        for idx, elem in enumerate(val):
-                            if args.verbose:
-                                print(elem)
-                            if key == 'cells':
-                                out_file = img_file.replace(".jpg", "_{}_{}_objects.json".format(table_idx, idx))
-                                with open(os.path.join(args.out_dir, out_file), 'w') as f:
-                                    json.dump(elem, f)
-                                if args.visualize:
-                                    visualize_cells(out['img'], elem)
-                            else:
-                                out_file = img_file.replace(".jpg", "_{}_{}.{}".format(table_idx, idx, key))
-                                with open(os.path.join(args.out_dir, out_file), 'w') as f:
-                                    f.write(elem)
+            for table_idx, extracted_table in enumerate(extracted_tables):
+                for key, val in extracted_table.items():
+                    output_result(key, val, args, extracted_table['img'],
+                                  img_file.replace('.jpg', '_{}.jpg'.format(table_idx)))
 
 if __name__ == "__main__":
     main()
