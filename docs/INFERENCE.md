@@ -93,5 +93,5 @@ python inference.py --mode recognize --structure_config_path structure_config.js
 
  ### To run table extraction (detection and recognition combined end-to-end) on a folder of document page images:
 ```
-python inference.py --mode extract --detection_config_path detection_config.json --detection_model_path ../pubtables1m_detection_detr_r18.pth --detection_device cuda --structure_config_path structure_config.json --structure_model_path ../pubtables1m_structure_detr_r18.pth --structure_device cuda --image_dir [PATH TO DOCUMENT PAGE IMAGES] --words_dir [OPTIONAL PATH TO WORDS (ex. OCR) EXTRACTED FROM DOCUMENT PAGE IMAGES] --out_dir [PATH TO SAVE DETECTION OUTPUT] [FLAGS: -o,-c,-l,-m,-z,-v,-p]
+python inference.py --mode extract --detection_config_path detection_config.json --detection_model_path ../pubtables1m_detection_detr_r18.pth --detection_device cuda --structure_config_path structure_config.json --structure_model_path ../pubtables1m_structure_detr_r18.pth --structure_device cuda --image_dir [PATH TO DOCUMENT PAGE IMAGES] --words_dir [OPTIONAL PATH TO WORDS (ex. OCR) EXTRACTED FROM DOCUMENT PAGE IMAGES] --out_dir [PATH TO SAVE DETECTION OUTPUT] [FLAGS: -o,-c,-l,-m,-z,-v,-p] --crop_padding 20
 ```
