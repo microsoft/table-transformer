@@ -560,10 +560,6 @@ def cells_to_html(cells):
             else:
                 cell_tag = "td"
                 row = ET.SubElement(table, "tr")
-        attrib['xmin'] = "{0:.3f}".format(cell['bbox'][0])
-        attrib['ymin'] = "{0:.3f}".format(cell['bbox'][1])
-        attrib['xmax'] = "{0:.3f}".format(cell['bbox'][2])
-        attrib['ymax'] = "{0:.3f}".format(cell['bbox'][3])
         tcell = ET.SubElement(row, cell_tag, attrib=attrib)
         tcell.text = cell['cell text']
 
