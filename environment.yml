@@ -1,22 +1,24 @@
-name: tables-detr2
+name: tables-detr4
 channels:
  - conda-forge
  - pytorch
  - defaults
 dependencies:
-  - python
+  - python==3.10.9
   - pip
-  - pytorch==1.5.0
-  - cudatoolkit
-  - torchvision==0.6.0
-  - pandas
-  - scikit-learn
-  - tqdm
-  - Cython
-  - matplotlib
-  - numpy
-  - pycocotools
+  - pytorch==1.13.1
+  - cudatoolkit==11.8.0
+  - torchvision==0.14.1
+  - pandas==1.5.3
+  - scikit-learn==1.2.1
+  - tqdm==4.65.0
+  - Cython==0.29.33
+  - matplotlib==3.7.0
+  - numpy==1.24.2
+  - pycocotools==2.0.6
+  - Pillow==9.4.0
+  - editdistance=0.6.2
   - pip:
-    - scikit-image
-    - scipy
-    - PyMuPDF==1.16.14
+    - scikit-image==0.20.0
+    - scipy==1.10.1
+    - PyMuPDF==1.21.1

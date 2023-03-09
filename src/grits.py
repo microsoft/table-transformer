@@ -227,11 +227,11 @@ def iou(bbox1, bbox2):
     Compute the intersection-over-union of two bounding boxes.
     """
     intersection = Rect(bbox1).intersect(bbox2)
-    union = Rect(bbox1).includeRect(bbox2)
+    union = Rect(bbox1).include_rect(bbox2)
     
-    union_area = union.getArea()
+    union_area = union.get_area()
     if union_area > 0:
-        return intersection.getArea() / union.getArea()
+        return intersection.get_area() / union.get_area()
     
     return 0
 
@@ -301,7 +301,7 @@ def get_spanning_cell_rows_and_columns(spanning_cells, rows, columns):
                 row['bbox'][3]
             ]
             bbox2 = Rect(spanning_cell['bbox']).intersect(bbox1)
-            if bbox2.getArea() / Rect(bbox1).getArea() >= 0.5:
+            if bbox2.get_area() / Rect(bbox1).get_area() >= 0.5:
                 row_matches.add(row_num)
         for column_num, column in enumerate(columns):
             bbox1 = [
@@ -309,7 +309,7 @@ def get_spanning_cell_rows_and_columns(spanning_cells, rows, columns):
                 spanning_cell['bbox'][3]
             ]
             bbox2 = Rect(spanning_cell['bbox']).intersect(bbox1)
-            if bbox2.getArea() / Rect(bbox1).getArea() >= 0.5:
+            if bbox2.get_area() / Rect(bbox1).get_area() >= 0.5:
                 column_matches.add(column_num)
         already_taken = False
         this_matches = []
@@ -326,10 +326,10 @@ def get_spanning_cell_rows_and_columns(spanning_cells, rows, columns):
             column_nums = [elem[1] for elem in this_matches]
             row_rect = Rect()
             for row_num in row_nums:
-                row_rect.includeRect(rows[row_num]['bbox'])
+                row_rect.include_rect(rows[row_num]['bbox'])
             column_rect = Rect()
             for column_num in column_nums:
-                column_rect.includeRect(columns[column_num]['bbox'])
+                column_rect.include_rect(columns[column_num]['bbox'])
             spanning_cell['bbox'] = list(row_rect.intersect(column_rect))
         else:
             matches_by_spanning_cell.append([])
