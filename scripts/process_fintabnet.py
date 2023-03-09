@@ -1051,6 +1051,10 @@ def get_args():
                         help="Root directory for source data to process")
     parser.add_argument('--output_dir',
                         help="Root directory for output data")
+    parser.add_argument('--train_padding', type=int, default=30,
+                        help="The amount of padding to add around a table in the training set when cropping.")
+    parser.add_argument('--test_padding', type=int, default=5,
+                        help="The amount of padding to add around a table in the val and test sets when cropping.")
     parser.add_argument('--skip_large', action='store_true')
     return parser.parse_args()
 
@@ -1099,9 +1103,9 @@ def main():
 
     for subdir in ['val', 'test', 'train']:
         if subdir == 'val' or subdir == 'test':
-            padding = 2
+            padding = args.test_padding
         else:
-            padding = 30
+            padding = args.train_padding
 
         print("Processing '{}' samples...".format(subdir))
         structure_filename = "FinTabNet_1.0.0_cell_" + subdir + ".jsonl"
