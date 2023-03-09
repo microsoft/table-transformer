@@ -14,7 +14,7 @@ from fitz import Rect
 import numpy as np
 import pandas as pd
 import matplotlib
-matplotlib.use('TkAgg')
+#matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.patches import Patch
@@ -113,6 +113,8 @@ def get_args():
                         help='Verbose output')
     parser.add_argument('--visualize', '-z', action='store_true',
                         help='Visualize output')
+    parser.add_argument('--crop_padding', type=int, default=10,
+                        help="The amount of padding to add around a detected table when cropping.")
 
     return parser.parse_args()
 
@@ -565,7 +567,7 @@ def cells_to_html(cells):
 
     return str(ET.tostring(table, encoding="unicode", short_empty_elements=False))
 
-def visualize_detected_tables(img, det_tables):
+def visualize_detected_tables(img, det_tables, out_path):
     plt.imshow(img, interpolation="lanczos")
     plt.gcf().set_size_inches(20, 20)
     ax = plt.gca()
@@ -609,12 +611,12 @@ def visualize_detected_tables(img, det_tables):
                     fontsize=10, ncol=2)  
     plt.gcf().set_size_inches(10, 10)
     plt.axis('off')
-    plt.show()
+    plt.savefig(out_path, bbox_inches='tight', dpi=150)
     plt.close()
 
     return
 
-def visualize_cells(img, cells):
+def visualize_cells(img, cells, out_path):
     plt.imshow(img, interpolation="lanczos")
     plt.gcf().set_size_inches(20, 20)
     ax = plt.gca()
@@ -664,7 +666,7 @@ def visualize_cells(img, cells):
                     fontsize=10, ncol=3)  
     plt.gcf().set_size_inches(10, 10)
     plt.axis('off')
-    plt.show()
+    plt.savefig(out_path, bbox_inches='tight', dpi=150)
     plt.close()
 
     return
@@ -697,6 +699,7 @@ class TableExtractionPipeline(object):
             if not det_model_path is None:
                 self.det_model.load_state_dict(torch.load(det_model_path,
                                                      map_location=torch.device(det_device)))
+                self.det_model.to(det_device)
                 self.det_model.eval()
                 print("Detection model weights loaded.")
             else:
@@ -713,6 +716,7 @@ class TableExtractionPipeline(object):
             if not str_model_path is None:
                 self.str_model.load_state_dict(torch.load(str_model_path,
                                                      map_location=torch.device(str_device)))
+                self.str_model.to(str_device)
                 self.str_model.eval()
                 print("Structure model weights loaded.")
             else:
@@ -722,7 +726,7 @@ class TableExtractionPipeline(object):
     def __call__(self, page_image, page_tokens=None):
         return self.extract(self, page_image, page_tokens)
 
-    def detect(self, img, tokens=None, out_objects=True, out_crops=False):
+    def detect(self, img, tokens=None, out_objects=True, out_crops=False, crop_padding=10):
         out_formats = {}
         if self.det_model is None:
             print("No detection model loaded.")
@@ -743,7 +747,8 @@ class TableExtractionPipeline(object):
 
         # Crop image and tokens for detected table
         if out_crops:
-            tables_crops = objects_to_crops(img, tokens, objects, self.det_class_thresholds)
+            tables_crops = objects_to_crops(img, tokens, objects, self.det_class_thresholds,
+                                            padding=crop_padding)
             out_formats['crops'] = tables_crops
 
         return out_formats
@@ -795,9 +800,10 @@ class TableExtractionPipeline(object):
         return out_formats
 
     def extract(self, img, tokens=None, out_objects=True, out_crops=False, out_cells=False,
-                out_html=False, out_csv=False):
+                out_html=False, out_csv=False, crop_padding=10):
 
-        detect_out = self.detect(img, tokens=tokens, out_objects=False, out_crops=True)
+        detect_out = self.detect(img, tokens=tokens, out_objects=False, out_crops=True,
+                                 crop_padding=crop_padding)
         cropped_tables = detect_out['crops']
 
         extracted_tables = []
@@ -822,7 +828,9 @@ def output_result(key, val, args, img, img_file):
         with open(os.path.join(args.out_dir, out_file), 'w') as f:
             json.dump(val, f)
         if args.visualize:
-            visualize_detected_tables(img, val)
+            out_file = img_file.replace(".jpg", "_fig_tables.jpg")
+            out_path = os.path.join(args.out_dir, out_file)
+            visualize_detected_tables(img, val, out_path)
     elif not key == 'image' and not key == 'tokens':
         for idx, elem in enumerate(val):
             if key == 'crops':
@@ -840,7 +848,9 @@ def output_result(key, val, args, img, img_file):
                 if args.verbose:
                     print(elem)
                 if args.visualize:
-                    visualize_cells(img, elem)
+                    out_file = img_file.replace(".jpg", "_fig_cells.jpg")
+                    out_path = os.path.join(args.out_dir, out_file)
+                    visualize_cells(img, elem, out_path)
             else:
                 out_file = img_file.replace(".jpg", "_{}.{}".format(idx, key))
                 with open(os.path.join(args.out_dir, out_file), 'w') as f:
@@ -916,7 +926,8 @@ def main():
 
         if args.mode == 'extract':
             extracted_tables = pipe.extract(img, tokens, out_objects=args.objects, out_cells=args.csv,
-                                            out_html=args.html, out_csv=args.csv)
+                                            out_html=args.html, out_csv=args.csv,
+                                            crop_padding=args.crop_padding)
             print("Table(s) extracted.")
 
             for table_idx, extracted_table in enumerate(extracted_tables):
