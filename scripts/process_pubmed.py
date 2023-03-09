@@ -1228,10 +1228,10 @@ def temp():
                     
                 # Crop
                 table_bbox = table_entry['pdf_bbox']
-                crop_bbox = [table_bbox[0]-30,
-                            table_bbox[1]-30,
-                            table_bbox[2]+30,
-                            table_bbox[3]+30]
+                crop_bbox = [table_bbox[0]-padding,
+                            table_bbox[1]-padding,
+                            table_bbox[2]+padding,
+                            table_bbox[3]+padding]
                 zoom = 1000 / max(page_bbox)
                 
                 tokens_in_table_img = get_tokens_in_table_img(page_words, crop_bbox)
@@ -1301,6 +1301,10 @@ def get_args():
     parser.add_argument('--timeout_seconds', type=int, default=90)
     parser.add_argument('--det_db_name', default='My-PubTables-Detection')
     parser.add_argument('--str_db_name', default='My-PubTables-Structure')
+    parser.add_argument('--train_padding', type=int, default=30,
+                        help="The amount of padding to add around a table in the training set when cropping.")
+    parser.add_argument('--test_padding', type=int, default=5,
+                        help="The amount of padding to add around a table in the val and test sets when cropping.")
     return parser.parse_args()
 
 
@@ -1312,6 +1316,8 @@ def main():
     detection_db_name = args.det_db_name
     structure_db_name = args.str_db_name
     VERBOSE = args.verbose
+    # TODO: Incorporate a train/test/val split and change padding for test/val sets
+    padding = args.train_padding
 
     output_directory = args.output_dir # root location where to save data
     det_xml_dir = os.path.join(output_directory, detection_db_name, "unsplit_xml")
@@ -1818,10 +1824,10 @@ def main():
                     
                 # Crop
                 table_bbox = table_entry['pdf_table_bbox']
-                crop_bbox = [table_bbox[0]-30,
-                            table_bbox[1]-30,
-                            table_bbox[2]+30,
-                            table_bbox[3]+30]
+                crop_bbox = [table_bbox[0]-padding,
+                            table_bbox[1]-padding,
+                            table_bbox[2]+padding,
+                            table_bbox[3]+padding]
                 zoom = 1000 / max(page_bbox)
                 
                 # Convert to image coordinates
