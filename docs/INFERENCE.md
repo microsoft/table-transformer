@@ -68,16 +68,34 @@ Change to `src` directory:
 ```
 cd src
 ```
-To run table detection on a folder of document page images:
+### To run table detection on a folder of document page images:
 ```
-python inference.py --mode detect --detection_config_path detection_config.json --detection_model_path ../pubtables1m_detection_detr_r18.pth --detection_device cuda --image_dir [PATH TO DOCUMENT PAGE IMAGES] --words_dir [OPTIONAL PATH TO WORDS (ex. OCR) EXTRACTED FROM DOCUMENT PAGE IMAGES] --out_dir [PATH TO SAVE DETECTION OUTPUT] [FLAGS: -o,-c,-l,-m,-z,-v,-p]
+python inference.py --mode detect --detection_config_path detection_config.json --detection_model_path ../pubtables1m_detection_detr_r18.pth --detection_device cuda --image_dir [PATH TO DOCUMENT PAGE IMAGES] --words_dir [OPTIONAL PATH TO WORDS (ex. OCR) EXTRACTED FROM DOCUMENT PAGE IMAGES] --out_dir [PATH TO SAVE DETECTION OUTPUT] [FLAGS: -o,-z,-v,-p] --crop_padding 20
 ```
-To run table structure recognition on a folder of cropped table images:
+where:
+- `--words_dir` is optional. But text content cannot be included in the final result without it.
+- `--crop_padding` determines how much padding in pixels will be added around a detected table before outputting a cropped image of the table. This amount should be adjusted based on the structure recognition model that will be used on these images.
+- `-o` means to output detected objects (with bounding boxes).
+- `-p` means to save cropped images of the detected tables and save a JSON with cropped words/tokens (if they were supplied as input).
+- `-v` means to print (verbose) output to the console.
+- `-z` means to create and save (visualize) figures depicting the detected tables.
+
+### To run table structure recognition on a folder of cropped table images:
 ```
-python inference.py --mode recognize --structure_config_path structure_config.json --structure_model_path ../pubtables1m_structure_detr_r18.pth --structure_device cuda --image_dir [PATH TO CROPPED TABLE IMAGES] --words_dir [OPTIONAL PATH TO WORDS (ex. OCR) EXTRACTED FROM CROPPED TABLE IMAGES] --out_dir [PATH TO SAVE DETECTION OUTPUT] [FLAGS: -o,-c,-l,-m,-z,-v,-p]
-  -
+python inference.py --mode recognize --structure_config_path structure_config.json --structure_model_path ../pubtables1m_structure_detr_r18.pth --structure_device cuda --image_dir [PATH TO CROPPED TABLE IMAGES] --words_dir [OPTIONAL PATH TO WORDS (ex. OCR) EXTRACTED FROM CROPPED TABLE IMAGES] --out_dir [PATH TO SAVE DETECTION OUTPUT] [FLAGS: -o,-c,-l,-m,-z,-v]
  ```
- To run table extraction (detection and recognition combined end-to-end) on a folder of document page images:
+ where:
+ - `--words_dir` is optional. But text content cannot be included in the final result without it. You can still use the visualize flag (-z) to see a depiction of the recognized table structure even without supplying text as input.
+- `-o` means to output detected objects (with bounding boxes)
+- `-l` means to output a list of recognized cells and their properties
+- `-m` means to output the recognized table in HTML format
+- `-c` means to output the recognized table in CSV format
+- `-v` means to print (verbose) output to the console
+- `-z` means to create and save (visualize) figures depicting the recognized tables and recognized cells in the tables
+
+ ### To run table extraction (detection and recognition combined end-to-end) on a folder of document page images:
 ```
-python inference.py --mode extract --detection_config_path detection_config.json --detection_model_path ../pubtables1m_detection_detr_r18.pth --detection_device cuda --structure_config_path structure_config.json --structure_model_path ../pubtables1m_structure_detr_r18.pth --structure_device cuda --image_dir [PATH TO DOCUMENT PAGE IMAGES] --words_dir [OPTIONAL PATH TO WORDS (ex. OCR) EXTRACTED FROM DOCUMENT PAGE IMAGES] --out_dir [PATH TO SAVE DETECTION OUTPUT] [FLAGS: -o,-c,-l,-m,-z,-v,-p]
+python inference.py --mode extract --detection_config_path detection_config.json --detection_model_path ../pubtables1m_detection_detr_r18.pth --detection_device cuda --structure_config_path structure_config.json --structure_model_path ../pubtables1m_structure_detr_r18.pth --structure_device cuda --image_dir [PATH TO DOCUMENT PAGE IMAGES] --words_dir [OPTIONAL PATH TO WORDS (ex. OCR) EXTRACTED FROM DOCUMENT PAGE IMAGES] --out_dir [PATH TO SAVE DETECTION OUTPUT] [FLAGS: -o,-c,-l,-m,-z,-v,-p] --crop_padding 20
 ```
+where:
+ - `--words_dir` is optional. But text content cannot be included in the final result without it. You can still use the visualize flag (-z) to see a depiction of the recognized table structure even without supplying text as input.

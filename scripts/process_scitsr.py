@@ -1370,6 +1370,10 @@ def get_args():
                         help="Root directory for source data to process")
     parser.add_argument('--output_dir',
                         help="Root directory for output data")
+    parser.add_argument('--train_padding', type=int, default=30,
+                        help="The amount of padding to add around a table in the training set when cropping.")
+    parser.add_argument('--test_padding', type=int, default=5,
+                        help="The amount of padding to add around a table in the val and test sets when cropping.")
     parser.add_argument('--skip_large', action='store_true')
     return parser.parse_args()
 
@@ -1465,9 +1469,9 @@ def main():
             page_words = doc[0].get_text_words()
 
             if split == 'val' or split == 'test':
-                padding = 2
+                padding = args.test_padding
             else:
-                padding = 30
+                padding = args.train_padding
 
             # For SciTSR, the table isn't always completely inside the PDF page
             page_rect = page.mediabox
@@ -1818,9 +1822,9 @@ def main():
 
             split = table_dict['split']
             if split == 'val' or split == 'test':
-                padding = 2
+                padding = args.test_padding
             else:
-                padding = 30
+                padding = args.train_padding
             
             # Pad
             crop_bbox = [crop_bbox[0]-padding,

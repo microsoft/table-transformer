@@ -6,7 +6,24 @@ This code is our best attempt to piece together the code that was used to create
 (PubTables-1M was originally created in multiple stages, not all in one script.)
 
 This script processes pairs of PDF and NXML files in the PubMed Open Access corpus.
+
 These need to be downloaded first.
+Download tar.gz files from the FTP site:
+https://ftp.ncbi.nlm.nih.gov/pub/pmc/oa_package/
+
+Please pay attention to licensing. See the PubMed Central website for more information on
+how to ensure you download data licensed for commercial use, if that is your need.
+
+Before running this script, place the downloaded files in the same directory and unzip them.
+This should create a collection of subdirectories each starting with "PMC..." like so:
+parent_folder\
+- PMC1234567\
+  - same_name.pdf
+  - same_name.nxml
+- PMC2345678\
+- PMC3456789\
+
+Note that this script has a timeout for each file and skips ones that take too long to process.
 
 If you use this code in your published work, we ask that you please cite our PubTables-1M paper
 and table-transformer GitHub repo.
@@ -1228,10 +1245,10 @@ def temp():
                     
                 # Crop
                 table_bbox = table_entry['pdf_bbox']
-                crop_bbox = [table_bbox[0]-30,
-                            table_bbox[1]-30,
-                            table_bbox[2]+30,
-                            table_bbox[3]+30]
+                crop_bbox = [table_bbox[0]-padding,
+                            table_bbox[1]-padding,
+                            table_bbox[2]+padding,
+                            table_bbox[3]+padding]
                 zoom = 1000 / max(page_bbox)
                 
                 tokens_in_table_img = get_tokens_in_table_img(page_words, crop_bbox)
@@ -1301,6 +1318,10 @@ def get_args():
     parser.add_argument('--timeout_seconds', type=int, default=90)
     parser.add_argument('--det_db_name', default='My-PubTables-Detection')
     parser.add_argument('--str_db_name', default='My-PubTables-Structure')
+    parser.add_argument('--train_padding', type=int, default=30,
+                        help="The amount of padding to add around a table in the training set when cropping.")
+    parser.add_argument('--test_padding', type=int, default=5,
+                        help="The amount of padding to add around a table in the val and test sets when cropping.")
     return parser.parse_args()
 
 
@@ -1312,6 +1333,8 @@ def main():
     detection_db_name = args.det_db_name
     structure_db_name = args.str_db_name
     VERBOSE = args.verbose
+    # TODO: Incorporate a train/test/val split and change padding for test/val sets
+    padding = args.train_padding
 
     output_directory = args.output_dir # root location where to save data
     det_xml_dir = os.path.join(output_directory, detection_db_name, "unsplit_xml")
@@ -1349,6 +1372,8 @@ def main():
         for d in dirs:
             if d.startswith("PMC"):
                 dir_path = os.path.join(source_directory, d)
+                if not os.path.isdir(dir_path):
+                    continue
                 dir_files = os.listdir(dir_path)
                 for fi in dir_files:
                     if fi.endswith(".pdf"):
@@ -1818,10 +1843,10 @@ def main():
                     
                 # Crop
                 table_bbox = table_entry['pdf_table_bbox']
-                crop_bbox = [table_bbox[0]-30,
-                            table_bbox[1]-30,
-                            table_bbox[2]+30,
-                            table_bbox[3]+30]
+                crop_bbox = [table_bbox[0]-padding,
+                            table_bbox[1]-padding,
+                            table_bbox[2]+padding,
+                            table_bbox[3]+padding]
                 zoom = 1000 / max(page_bbox)
                 
                 # Convert to image coordinates
