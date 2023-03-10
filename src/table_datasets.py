@@ -464,7 +464,9 @@ def get_structure_transform(image_set):
 
     if image_set == 'train':
         return R.Compose([
-            RandomCrop(1, 10, 10, 10, 10),
+            R.RandomSelect(TightAnnotationCrop([0], 30, 30, 30, 30),
+                           TightAnnotationCrop([0], 10, 10, 10, 10),
+                           p=0.5),
             RandomMaxResize(900, 1100), random_erasing, normalize
         ])
 
