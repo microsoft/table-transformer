@@ -6,7 +6,24 @@ This code is our best attempt to piece together the code that was used to create
 (PubTables-1M was originally created in multiple stages, not all in one script.)
 
 This script processes pairs of PDF and NXML files in the PubMed Open Access corpus.
+
 These need to be downloaded first.
+Download tar.gz files from the FTP site:
+https://ftp.ncbi.nlm.nih.gov/pub/pmc/oa_package/
+
+Please pay attention to licensing. See the PubMed Central website for more information on
+how to ensure you download data licensed for commercial use, if that is your need.
+
+Before running this script, place the downloaded files in the same directory and unzip them.
+This should create a collection of subdirectories each starting with "PMC..." like so:
+parent_folder\
+- PMC1234567\
+  - same_name.pdf
+  - same_name.nxml
+- PMC2345678\
+- PMC3456789\
+
+Note that this script has a timeout for each file and skips ones that take too long to process.
 
 If you use this code in your published work, we ask that you please cite our PubTables-1M paper
 and table-transformer GitHub repo.
@@ -1355,6 +1372,8 @@ def main():
         for d in dirs:
             if d.startswith("PMC"):
                 dir_path = os.path.join(source_directory, d)
+                if not os.path.isdir(dir_path):
+                    continue
                 dir_files = os.listdir(dir_path)
                 for fi in dir_files:
                     if fi.endswith(".pdf"):
