@@ -1,4 +1,4 @@
-name: tables-detr4
+name: tables-detr
 channels:
  - conda-forge
  - pytorch
