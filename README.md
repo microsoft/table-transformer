@@ -213,6 +213,16 @@ Alternatively, many of the arguments in the config file can be specified as comm
 ## Citing
 Our work can be cited using:
 ```
+@software{smock2021tabletransformer,
+  author = {Smock, Brandon and Pesala, Rohith},
+  month = {06},
+  title = {{Table Transformer}},
+  url = {https://github.com/microsoft/table-transformer},
+  version = {1.0.0},
+  year = {2021}
+}
+```
+```
 @inproceedings{smock2022pubtables,
   title={Pub{T}ables-1{M}: Towards comprehensive table extraction from unstructured documents},
   author={Smock, Brandon and Pesala, Rohith and Abraham, Robin},
@@ -228,6 +238,14 @@ Our work can be cited using:
   title={Gri{TS}: Grid table similarity metric for table structure recognition},
   journal={arXiv preprint arXiv:2203.12555},
   year={2022}
+}
+```
+```
+@article{smock2023aligning,
+  title={Aligning benchmark datasets for table structure recognition},
+  author={Smock, Brandon and Pesala, Rohith and Abraham, Robin},
+  journal={arXiv preprint arXiv:2303.00716},
+  year={2023}
 }
 ```
 
