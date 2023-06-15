@@ -70,7 +70,7 @@ We provide the pre-trained models for table detection and table structure recogn
       <td>0.989</td>
       <td>0.970</td>
       <td>0.985</td>
-      <td><a href="https://pubtables1m.blob.core.windows.net/model/pubtables1m_detection_detr_r18.pth">Weights</a></td>
+      <td><a href="https://huggingface.co/bsmock/tatr-pubtables1m-v1.0/resolve/main/pubtables1m_detection_detr_r18.pth">Weights</a></td>
       <td>110 MB</td>
     </tr>
   </tbody>
@@ -106,7 +106,7 @@ We provide the pre-trained models for table detection and table structure recogn
       <td>0.9850</td>
       <td>0.9786</td>
       <td>0.8243</td>
-      <td><a href="https://pubtables1m.blob.core.windows.net/model/pubtables1m_structure_detr_r18.pth">Weights</a></td>
+      <td><a href="https://huggingface.co/bsmock/tatr-pubtables1m-v1.0/resolve/main/pubtables1m_structure_detr_r18.pth">Weights</a></td>
       <td>110 MB</td>
     </tr>
   </tbody>
