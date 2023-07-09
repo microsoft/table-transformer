@@ -32,9 +32,6 @@ def get_args():
     parser.add_argument('--config_file',
                         required=True,
                         help="Filepath to the config containing the args")
-    parser.add_argument('--backbone',
-                        default='resnet18',
-                        help="Backbone for the model")
     parser.add_argument(
         '--data_type',
         choices=['detection', 'structure'],
