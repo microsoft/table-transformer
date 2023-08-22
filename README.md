@@ -17,6 +17,7 @@ Note: If you are looking to use Table Transformer to extract your own tables, he
 Additional information about this project for both users and researchers, including data, training, evaluation, and inference code is provided below.
 
 ## News
+`08/22/2023`: We have released 3 new pre-trained models for TATR-v1.1 (trained on 1. PubTables-1M, 2. FinTabNet.c, and 3. both datasets combined) according to the details in [our paper](https://arxiv.org/abs/2303.00716).\
 `04/19/2023`: Our latest papers ([link](https://arxiv.org/abs/2203.12555) and [link](https://arxiv.org/abs/2303.00716)) have been accepted at [ICDAR 2023](https://icdar2023.org/).\
 `03/09/2023`: We have added more image cropping to the official training script (like we do in our most recent paper) and updated the code and environment.yml to use Python 3.10.9, PyTorch 1.13.1, and Torchvision 0.14.1, among others.\
 `03/07/2023`: We have released a new simple [inference pipeline](src/inference.py) for TATR. Now you can easily detect and recognize tables from images and convert them to HTML or CSV.\
@@ -45,19 +46,16 @@ It contains:
 
 Additionally, cells in the headers are *canonicalized* and we implement multiple *quality control* steps to ensure the annotations are as free of noise as possible. For more details, please see [our paper](https://arxiv.org/pdf/2110.00061.pdf).
 
-## Model Weights
-We provide the pre-trained models for table detection and table structure recognition trained for 20 epochs on PubTables-1M.
+## Pre-trained Model Weights
+We provide different pre-trained models for table detection and table structure recognition.
 
 <b>Table Detection:</b>
 <table>
   <thead>
     <tr style="text-align: right;">
       <th>Model</th>
-      <th>Schedule</th>
-      <th>AP50</th>
-      <th>AP75</th>
-      <th>AP</th>
-      <th>AR</th>
+      <th>Training Data</th>
+      <th>Model Card</th>
       <th>File</th>
       <th>Size</th>
     </tr>
@@ -65,11 +63,8 @@ We provide the pre-trained models for table detection and table structure recogn
   <tbody>
     <tr style="text-align: right;">
       <td>DETR R18</td>
-      <td>20 Epochs</td>
-      <td>0.995</td>
-      <td>0.989</td>
-      <td>0.970</td>
-      <td>0.985</td>
+      <td>PubTables-1M</td>
+      <td><a href="https://huggingface.co/bsmock/tatr-pubtables1m-v1.0">Model Card</a></td>
       <td><a href="https://huggingface.co/bsmock/tatr-pubtables1m-v1.0/resolve/main/pubtables1m_detection_detr_r18.pth">Weights</a></td>
       <td>110 MB</td>
     </tr>
@@ -79,9 +74,78 @@ We provide the pre-trained models for table detection and table structure recogn
 <b>Table Structure Recognition:</b>
 <table>
   <thead>
+    <tr style="text-align: left;">
+      <th>Model</th>
+      <th>Training Data</th>
+      <th>Model Card</th>
+      <th>File</th>
+      <th>Size</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="text-align: left;">
+      <td>TATR-v1.0</td>
+      <td>PubTables-1M</td>
+      <td><a href="https://huggingface.co/bsmock/tatr-pubtables1m-v1.0">Model Card</a></td>
+      <td><a href="https://huggingface.co/bsmock/tatr-pubtables1m-v1.0/resolve/main/pubtables1m_structure_detr_r18.pth">Weights</a></td>
+      <td>110 MB</td>
+    </tr>
+    <tr style="text-align: left;">
+      <td>TATR-v1.1-Pub</td>
+      <td>PubTables-1M</td>
+      <td><a href="https://huggingface.co/bsmock/TATR-v1.1-Pub">Model Card</a></td>
+      <td><a href="https://huggingface.co/bsmock/TATR-v1.1-Pub/resolve/main/TATR-v1.1-Pub-msft.pth">Weights</a></td>
+      <td>110 MB</td>
+    </tr>
+    <tr style="text-align: left;">
+      <td>TATR-v1.1-Fin</td>
+      <td>FinTabNet.c</td>
+      <td><a href="https://huggingface.co/bsmock/TATR-v1.1-Fin">Model Card</a></td>
+      <td><a href="https://huggingface.co/bsmock/TATR-v1.1-Fin/resolve/main/TATR-v1.1-Fin-msft.pth">Weights</a></td>
+      <td>110 MB</td>
+    </tr>
+    <tr style="text-align: left;">
+      <td>TATR-v1.1-All</td>
+      <td>PubTables-1M + FinTabNet.c</td>
+      <td><a href="https://huggingface.co/bsmock/TATR-v1.1-All">Model Card</a></td>
+      <td><a href="https://huggingface.co/bsmock/TATR-v1.1-All/resolve/main/TATR-v1.1-All-msft.pth">Weights</a></td>
+      <td>110 MB</td>
+    </tr>
+  </tbody>
+</table>
+
+## Evaluation Metrics
+
+<b>Table Detection:</b>
+<table>
+  <thead>
     <tr style="text-align: right;">
       <th>Model</th>
-      <th>Schedule</th>
+      <th>Test Data</th>
+      <th>AP50</th>
+      <th>AP75</th>
+      <th>AP</th>
+      <th>AR</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="text-align: right;">
+      <td>DETR R18</td>
+      <td>PubTables-1M</td>
+      <td>0.995</td>
+      <td>0.989</td>
+      <td>0.970</td>
+      <td>0.985</td>
+    </tr>
+  </tbody>
+</table>
+
+<b>Table Structure Recognition:</b>
+<table>
+  <thead>
+    <tr style="text-align: right;">
+      <th>Model</th>
+      <th>Test Data</th>
       <th>AP50</th>
       <th>AP75</th>
       <th>AP</th>
@@ -90,14 +154,12 @@ We provide the pre-trained models for table detection and table structure recogn
       <th>GriTS<sub>Con</sub></th>
       <th>GriTS<sub>Loc</sub></th>
       <th>Acc<sub>Con</sub></th>
-      <th>File</th>
-      <th>Size</th>
     </tr>
   </thead>
   <tbody>
     <tr style="text-align: right;">
-      <td>DETR R18</td>
-      <td>20 Epochs</td>
+      <td>TATR-v1.0</td>
+      <td>PubTables-1M</td>
       <td>0.970</td>
       <td>0.941</td>
       <td>0.902</td>
@@ -106,8 +168,6 @@ We provide the pre-trained models for table detection and table structure recogn
       <td>0.9850</td>
       <td>0.9786</td>
       <td>0.8243</td>
-      <td><a href="https://huggingface.co/bsmock/tatr-pubtables1m-v1.0/resolve/main/pubtables1m_structure_detr_r18.pth">Weights</a></td>
-      <td>110 MB</td>
     </tr>
   </tbody>
 </table>
