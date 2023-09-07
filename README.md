@@ -294,19 +294,23 @@ Our work can be cited using:
 }
 ```
 ```
-@article{smock2022grits,
-  author={Smock, Brandon and Pesala, Rohith and Abraham, Robin},
+@inproceedings{smock2023grits,
   title={Gri{TS}: Grid table similarity metric for table structure recognition},
-  journal={arXiv preprint arXiv:2203.12555},
-  year={2022}
+  author={Smock, Brandon and Pesala, Rohith and Abraham, Robin},
+  booktitle={International Conference on Document Analysis and Recognition},
+  pages={535--549},
+  year={2023},
+  organization={Springer}
 }
 ```
 ```
 @article{smock2023aligning,
   title={Aligning benchmark datasets for table structure recognition},
   author={Smock, Brandon and Pesala, Rohith and Abraham, Robin},
-  journal={arXiv preprint arXiv:2303.00716},
-  year={2023}
+  booktitle={International Conference on Document Analysis and Recognition},
+  pages={371--386},
+  year={2023},
+  organization={Springer}
 }
 ```
 
