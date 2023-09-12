@@ -884,7 +884,7 @@ def main():
     for count, img_file in enumerate(img_files):
         print("({}/{})".format(count+1, num_files))
         img_path = os.path.join(args.image_dir, img_file)
-        img = Image.open(img_path)
+        img = Image.open(img_path).convert('RGB')
         print("Image loaded.")
 
         if not args.words_dir is None:
