@@ -71,12 +71,12 @@ def crop_around_bbox_coco(image, crop_bbox, max_margin, target):
             cropped_labels.append(label)
 
     if len(cropped_bboxes) > 0:
-        target["boxes"] = torch.as_tensor(cropped_bboxes, dtype=torch.float32)
+        target["boxes"] = torch.as_tensor(cropped_bboxes, dtype=torch.float32).reshape(-1, 4)
         target["labels"] = torch.as_tensor(cropped_labels, dtype=torch.int64)
         w, h = img.size
         target["size"] = torch.tensor([w, h])
         return cropped_image, target
-                 
+
     return image, target
 
 
@@ -162,7 +162,7 @@ class RandomCrop(object):
                     cropped_labels.append(label)
                          
             if len(cropped_bboxes) > 0:
-                target["boxes"] = torch.as_tensor(cropped_bboxes, dtype=torch.float32)
+                target["boxes"] = torch.as_tensor(cropped_bboxes, dtype=torch.float32).reshape(-1, 4)
                 target["labels"] = torch.as_tensor(cropped_labels, dtype=torch.int64)
                 return cropped_image, target
 
@@ -202,9 +202,9 @@ class RandomResize(object):
                 if bbox[0] < bbox[2] - 1 and bbox[1] < bbox[3] - 1:
                     resized_bboxes.append(bbox)
                     resized_labels.append(label)
-                         
+
             if len(resized_bboxes) > 0:
-                target["boxes"] = torch.as_tensor(resized_bboxes, dtype=torch.float32)
+                target["boxes"] = torch.as_tensor(resized_bboxes, dtype=torch.float32).reshape(-1, 4)
                 target["labels"] = torch.as_tensor(resized_labels, dtype=torch.int64)
                 return resized_image, target
 
@@ -290,9 +290,9 @@ class RandomCrop(object):
                 if bbox[0] < bbox[2] and bbox[1] < bbox[3]:
                     cropped_bboxes.append(bbox)
                     cropped_labels.append(label)
-                         
+
             if len(cropped_bboxes) > 0:
-                target["boxes"] = torch.as_tensor(cropped_bboxes, dtype=torch.float32)
+                target["boxes"] = torch.as_tensor(cropped_bboxes, dtype=torch.float32).reshape(-1, 4)
                 target["labels"] = torch.as_tensor(cropped_labels, dtype=torch.int64)
                 return cropped_image, target
 
@@ -324,9 +324,9 @@ class RandomPercentageCrop(object):
                 if bbox[0] < bbox[2] and bbox[1] < bbox[3]:
                     cropped_bboxes.append(bbox)
                     cropped_labels.append(label)
-                         
+
             if len(cropped_bboxes) > 0:
-                target["boxes"] = torch.as_tensor(cropped_bboxes, dtype=torch.float32)
+                target["boxes"] = torch.as_tensor(cropped_bboxes, dtype=torch.float32).reshape(-1, 4)
                 target["labels"] = torch.as_tensor(cropped_labels, dtype=torch.int64)
                 return cropped_image, target
 
@@ -413,7 +413,7 @@ class RandomResize(object):
             bbox = [scale*elem for elem in bbox]
             resized_bboxes.append(bbox)
 
-        target["boxes"] = torch.as_tensor(resized_bboxes, dtype=torch.float32)
+        target["boxes"] = torch.as_tensor(resized_bboxes, dtype=torch.float32).reshape(-1, 4)
         
         return resized_image, target
 
@@ -433,7 +433,7 @@ class RandomMaxResize(object):
             bbox = [scale*elem for elem in bbox]
             resized_bboxes.append(bbox)
 
-        target["boxes"] = torch.as_tensor(resized_bboxes, dtype=torch.float32)
+        target["boxes"] = torch.as_tensor(resized_bboxes, dtype=torch.float32).reshape(-1, 4)
         
         return resized_image, target
 
@@ -619,7 +619,7 @@ class PDFTablesDataset(torch.utils.data.Dataset):
         img = Image.open(img_path).convert("RGB")
         w, h = img.size
         
-        if self.types[idx] == 1:        
+        if self.types[idx] == 1:
             bboxes, labels = read_pascal_voc(annot_path, class_map=self.class_map)
 
             # Reduce class set
@@ -627,14 +627,8 @@ class PDFTablesDataset(torch.utils.data.Dataset):
             bboxes = [bboxes[idx] for idx in keep_indices]
             labels = [labels[idx] for idx in keep_indices]
 
-            # Convert to Torch Tensor
-            if len(labels) > 0:
-                bboxes = torch.as_tensor(bboxes, dtype=torch.float32)
-                labels = torch.as_tensor(labels, dtype=torch.int64)
-            else:
-                # Not clear if it's necessary to force the shape of bboxes to be (0, 4)
-                bboxes = torch.empty((0, 4), dtype=torch.float32)
-                labels = torch.empty((0,), dtype=torch.int64)
+            bboxes = torch.as_tensor(bboxes, dtype=torch.float32).reshape(-1, 4)
+            labels = torch.as_tensor(labels, dtype=torch.int64)
         else:
             bboxes = torch.empty((0, 4), dtype=torch.float32)
             labels = torch.empty((0,), dtype=torch.int64)
