@@ -6,6 +6,7 @@ import math
 import os
 import sys
 from typing import Iterable
+import errno
 
 import torch
 
@@ -30,6 +31,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         batch_count += 1
         if not max_batches_per_epoch is None and batch_count > max_batches_per_epoch:
             break
+        # print("samples: {}".format(samples))
         samples = samples.to(device)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
@@ -37,6 +39,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         loss_dict = criterion(outputs, targets)
         weight_dict = criterion.weight_dict
         losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if k in weight_dict)
+        # print("losses: {}".format(losses))
 
         # reduce losses over all GPUs for logging purposes
         loss_dict_reduced = utils.reduce_dict(loss_dict)
@@ -54,7 +57,12 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             sys.exit(1)
 
         optimizer.zero_grad()
+
+        # losses.register_hook(lambda grad: print("Gradient: {}".format(grad)))
+        # print("grad_fn: {}".format(losses.grad_fn))
         losses.backward()
+        # print("model: {}".format(model))
+        # print("max_norm: {}", max_norm)
         if max_norm > 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
         optimizer.step()
@@ -69,7 +77,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
 
 @torch.no_grad()
-def evaluate(model, criterion, postprocessors, data_loader, base_ds, device, output_dir):
+def evaluate(model, criterion, postprocessors, data_loader, base_ds, device, output_dir, coco_eval_prefix):
     model.eval()
     criterion.eval()
 
@@ -93,7 +101,9 @@ def evaluate(model, criterion, postprocessors, data_loader, base_ds, device, out
         samples = samples.to(device)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
+        # print("samples: {}", samples)
         outputs = model(samples)
+        # print("outputs: {} targets: {}".format(dict((key, value.size()) for key, value in outputs.items()), targets))
         loss_dict = criterion(outputs, targets)
         weight_dict = criterion.weight_dict
 
@@ -148,6 +158,14 @@ def evaluate(model, criterion, postprocessors, data_loader, base_ds, device, out
             stats['coco_eval_bbox'] = coco_evaluator.coco_eval['bbox'].stats.tolist()
         if 'segm' in postprocessors.keys():
             stats['coco_eval_masks'] = coco_evaluator.coco_eval['segm'].stats.tolist()
+        if coco_eval_prefix:
+            try:
+                os.makedirs(os.path.dirname(coco_eval_prefix))
+            except OSError as exc: # Guard against race condition
+                if exc.errno != errno.EEXIST:
+                    raise
+            for k, v in coco_evaluator.coco_eval.items():
+                torch.save(v.eval, "{}_{}.pt".format(coco_eval_prefix, k))
     if panoptic_res is not None:
         stats['PQ_all'] = panoptic_res["All"]
         stats['PQ_th'] = panoptic_res["Things"]

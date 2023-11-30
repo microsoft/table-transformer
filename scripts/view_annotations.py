@@ -11,7 +11,7 @@ Assumes the data is in PASCAL VOC data format and the folder structure is:
 
 import argparse
 import os
-import json
+# import json
 from collections import defaultdict
 import traceback
 
@@ -67,8 +67,8 @@ def get_args():
 
     parser.add_argument('--pascal_data_dir',
                         help="Root directory for source data to process")
-    parser.add_argument('--words_data_dir',
-                        help="Root directory for source data to process")
+    # parser.add_argument('--words_data_dir',
+    #                     help="Root directory for source data to process")
     parser.add_argument('--split', default='',
                         help="Split to process")
     parser.add_argument('--output_dir',
@@ -80,7 +80,7 @@ def main():
     args = get_args()
 
     data_directory = args.pascal_data_dir
-    words_directory = args.words_data_dir
+    # words_directory = args.words_data_dir
     split = args.split
     output_directory = args.output_dir
     num_samples = args.num_samples
@@ -111,7 +111,15 @@ def main():
             
             ax = plt.gca()
             ax.imshow(img, interpolation="lanczos")
-            plt.gcf().set_size_inches((24, 24))
+
+            _, a, b = min(((abs(a * img.size[0] - b * img.size[1]), a, b) for a in range(1, 7) for b in range(1, 7) if 6 <= a * b < 6 + min(a, b)))
+
+            _, axs = plt.subplots(b, a, figsize=(12, 12))
+            axes = axs.flatten()
+            for ax in axes:
+                ax.imshow(img, interpolation="lanczos")
+
+            # plt.gcf().set_size_inches((24 * 3, 24 * 2))
 
             tables = [bbox for bbox, label in zip(bboxes, labels) if label == 'table']
             columns = [bbox for bbox, label in zip(bboxes, labels) if label == 'table column']
@@ -120,50 +128,65 @@ def main():
             projected_row_headers = [bbox for bbox, label in zip(bboxes, labels) if label == 'table projected row header']
             spanning_cells = [bbox for bbox, label in zip(bboxes, labels) if label == 'table spanning cell']
 
-            for column_num, bbox in enumerate(columns):
-                if column_num % 2 == 0:
-                    linewidth = 2
-                    alpha = 0.6
-                    facecolor = 'none'
-                    edgecolor = 'red'
-                    hatch = '..'
-                else:
-                    linewidth = 2
-                    alpha = 0.15
-                    facecolor = (1, 0, 0)
-                    edgecolor = (0.8, 0, 0)
-                    hatch = ''
-                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=0, 
-                                         edgecolor=edgecolor, facecolor=facecolor, linestyle="-",
-                                         hatch=hatch, alpha=alpha)
-                ax.add_patch(rect)
-                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=linewidth, 
-                                             edgecolor='red', facecolor='none', linestyle="-",
-                                             alpha=0.8)
+            ax = axes[0]
+            for table_bbox in tables:
+                rect = patches.Rectangle(table_bbox[:2], table_bbox[2]-table_bbox[0], table_bbox[3]-table_bbox[1], linewidth=1, 
+                                         edgecolor='green', facecolor="none"
+                                         # , alpha=0.25
+                                         )
                 ax.add_patch(rect)
 
-            for row_num, bbox in enumerate(rows):
-                if row_num % 2 == 1:
-                    linewidth = 2
-                    alpha = 0.6
-                    edgecolor = 'blue'
-                    facecolor = 'none'
-                    hatch = '....'
+            column_even_edge_color = 'darkorange'
+            column_even_face_color = 'orange'
+            column_even_alpha = 0.1
+            column_odd_edge_color = 'darkblue'
+            column_odd_face_color = 'blue'
+            column_odd_alpha = 0.2
+            ax = axes[1]
+            for column_num, bbox in enumerate(columns):
+                if column_num % 2 == 0:
+                    alpha = column_even_alpha
+                    facecolor = column_even_face_color
+                    edgecolor = column_even_edge_color
                 else:
-                    linewidth = 2
-                    alpha = 0.1
-                    facecolor = (0, 0, 1)
-                    edgecolor = (0, 0, 0.8)
-                    hatch = ''
+                    alpha = column_odd_alpha
+                    facecolor = column_odd_face_color
+                    edgecolor = column_odd_edge_color
                 rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=0, 
                                          edgecolor=edgecolor, facecolor=facecolor, linestyle="-",
-                                         hatch=hatch, alpha=alpha)
+                                         alpha=alpha)
                 ax.add_patch(rect)
-                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=linewidth, 
-                                             edgecolor='blue', facecolor='none', linestyle="-",
-                                             alpha=0.8)
+                # rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
+                #                              edgecolor='rosybrown', facecolor='none', linestyle="-",
+                #                              alpha=0.8)
+                # ax.add_patch(rect)
+
+            row_even_edge_color = 'darkred'
+            row_even_face_color = 'red'
+            row_even_alpha = 0.1
+            row_odd_edge_color = 'darkgreen'
+            row_odd_face_color = 'green'
+            row_odd_alpha = 0.2
+            ax = axes[2]
+            for row_num, bbox in enumerate(rows):
+                if row_num % 2 == 1:
+                    alpha = row_odd_alpha
+                    edgecolor = row_odd_edge_color
+                    facecolor = row_odd_face_color
+                else:
+                    alpha = row_even_alpha
+                    facecolor = row_even_edge_color
+                    edgecolor = row_even_edge_color
+                rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=0, 
+                                         edgecolor=edgecolor, facecolor=facecolor, linestyle="-",
+                                         alpha=alpha)
                 ax.add_patch(rect)
+                # rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=linewidth, 
+                #                              edgecolor='blue', facecolor='none', linestyle="-",
+                #                              alpha=0.8)
+                # ax.add_patch(rect)
             
+            ax = axes[3]
             for bbox in column_headers:
                 linewidth = 3
                 alpha = 0.3
@@ -176,6 +199,7 @@ def main():
                                          edgecolor=edgecolor,facecolor='none',linestyle="-", hatch='///')
                 ax.add_patch(rect)
 
+            ax = axes[4]
             for bbox in projected_row_headers:
                 facecolor = (1, 0.9, 0.5) #(0, 0.75, 1) #(0, 0.4, 0.4)
                 edgecolor = (1, 0.9, 0.5) #(0, 0.7, 0.95)
@@ -189,9 +213,13 @@ def main():
                                          edgecolor=edgecolor,facecolor='none',linestyle=linestyle)
                 ax.add_patch(rect)
                 rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=0,
-                                         edgecolor=edgecolor,facecolor='none',linestyle=linestyle, hatch='\\\\')
+                                         edgecolor=edgecolor,facecolor='none'
+                                         #, linestyle=linestyle
+                                         , hatch='\\\\'
+                                         )
                 ax.add_patch(rect)
 
+            ax = axes[5]
             for bbox in spanning_cells:
                 color = (0.2, 0.5, 0.2) #(0, 0.4, 0.4)
                 alpha = 0.4
@@ -204,33 +232,41 @@ def main():
                                          edgecolor=color,facecolor='none',linestyle=linestyle) # hatch='//'
                 ax.add_patch(rect)
 
-            table_bbox = tables[0]
-            plt.xlim([table_bbox[0]-5, table_bbox[2]+5])
-            plt.ylim([table_bbox[3]+5, table_bbox[1]-5])
+            for ax in axes:
+              ax.set_xlim([min((table_bbox[0] for table_bbox in tables)) - 5, max((table_bbox[2] for table_bbox in tables))+5])
+              ax.set_ylim([max((table_bbox[3] for table_bbox in tables))+5, min((table_bbox[1] for table_bbox in tables)) - 5])
+
+            # table_bbox = tables[0]
+            # plt.xlim([table_bbox[0]-5, table_bbox[2]+5])
+            # plt.ylim([table_bbox[3]+5, table_bbox[1]-5])
             plt.xticks([], [])
             plt.yticks([], [])
 
-            legend_elements = [Patch(facecolor=(0.9, 0.9, 1), edgecolor=(0, 0, 0.8),
+            legend_elements = [[Patch(facecolor=(1, 1, 1), edgecolor="green",
+                                     label='Tables')],
+                                   [Patch(facecolor=column_odd_face_color, edgecolor=column_odd_edge_color, alpha=column_odd_alpha,
+                                     label='Column (odd)'),
+                               Patch(facecolor=column_even_face_color, edgecolor=column_even_edge_color, alpha=column_even_alpha,
+                                     label='Column (even)')],
+                           [Patch(facecolor=row_odd_face_color, edgecolor=row_odd_edge_color, alpha=row_odd_alpha,
                                      label='Row (odd)'),
-                               Patch(facecolor=(1, 1, 1), edgecolor=(0, 0, 0.8),
-                                     label='Row (even)', hatch='...'),
-                               Patch(facecolor=(1, 1, 1), edgecolor=(0.8, 0, 0),
-                                     label='Column (odd)', hatch='...'),
-                               Patch(facecolor=(1, 0.85, 0.85), edgecolor=(0.8, 0, 0),
-                                     label='Column (even)'),
-                               Patch(facecolor=(0.68, 0.8, 0.68), edgecolor=(0.2, 0.5, 0.2),
-                                     label='Spanning cell'),
-                               Patch(facecolor=(1, 0.7, 0.925), edgecolor=(1, 0, 0.75),
-                                     label='Column header', hatch='///'),
-                               Patch(facecolor=(1, 0.965, 0.825), edgecolor=(1, 0.9, 0.5),
-                                     label='Projected row header', hatch='\\\\')]
-            ax.legend(handles=legend_elements, bbox_to_anchor=(0, -0.02), loc='upper left', borderaxespad=0,
-                         fontsize=16, ncol=4)  
-            plt.gcf().set_size_inches(20, 20)
+                               Patch(facecolor=row_even_face_color, edgecolor=row_even_edge_color, alpha=row_even_alpha,
+                                     label='Row (even)')],
+                               [Patch(facecolor=(1, 0.7, 0.925), edgecolor=(1, 0, 0.75),
+                                     label='Column header', hatch='///')],
+                               [Patch(facecolor=(1, 0.965, 0.825), edgecolor=(1, 0.9, 0.5),
+                                     label='Projected row header', hatch='\\\\')],
+                               [Patch(facecolor=(0.68, 0.8, 0.68), edgecolor=(0.2, 0.5, 0.2),
+                                     label='Spanning cell')],
+                                     ]
+            for ax, legend_elements in zip(axes, legend_elements):
+               ax.legend(handles=legend_elements, bbox_to_anchor=(0, -0.02), loc='upper left', borderaxespad=0,
+                         fontsize=16, ncol=4)
+            plt.gcf().set_size_inches(20 * a * img.size[0] / b / img.size[1], 20)
             plt.axis('off')
             save_filepath = os.path.join(output_directory, filename.replace(".xml", "_ANNOTATIONS.jpg"))
             plt.savefig(save_filepath, bbox_inches='tight', dpi=150)
-            plt.show()
+            # plt.show()
             plt.close()
         except:
             traceback.print_exc()

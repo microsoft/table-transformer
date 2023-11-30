@@ -16,6 +16,7 @@ import re
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 import argparse
+import sys
 
 import fitz
 from fitz import Rect
@@ -23,6 +24,12 @@ from PIL import Image
 import numpy as np
 from tqdm import tqdm
 import editdistance
+
+sys.path.append("../detr")
+import util.misc as utils
+
+# Enable hacks for synth fintabnet.
+ENABLE_SYNTH = True
 
 # Can be used for interrupting after a specific event occurs for debugging
 class DebugException(Exception):
@@ -49,25 +56,29 @@ def adjust_bbox_coordinates(data, doc):
         cell['bbox'] = bbox
         
         
-def create_document_page_image(doc, page_num, zoom=None, output_image_max_dim=1000):
-    page = doc[page_num]
+# def create_document_page_image(doc, page_num, zoom=None, output_image_max_dim=1000):
+#     page = doc[page_num]
     
-    if zoom is None:
-        zoom = output_image_max_dim / max(page.rect)
+#     if zoom is None:
+#         zoom = output_image_max_dim / max(page.rect)
         
-    mat = fitz.Matrix(zoom, zoom)
-    pix = page.get_pixmap(matrix = mat, alpha = False)
-    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+#     mat = fitz.Matrix(zoom, zoom)
+#     pix = page.get_pixmap(matrix = mat, alpha = False)
+#     img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
     
-    return img
+#     return img
 
 
 def parse_html_table(table_html):
+    # print(table_html)
     try:
         tree = ET.fromstring(table_html)
     except Exception as e:
-        print(e)
-        return None
+        if ENABLE_SYNTH:
+            raise
+        else:
+            print(f"Error: {e} parsing html: {table_html}")
+            return None
     
     table_cells = []
     
@@ -113,6 +124,9 @@ def parse_html_table(table_html):
             stack.append((child, in_header or current.tag == 'th' or current.tag == 'thead'))
     
     return table_cells
+
+def none_to_zero(l):
+    return [x if x is not None else 0 for x in l]
 
 
 def create_table_dict(annotation_data):
@@ -233,10 +247,10 @@ def complete_table_grid(table_dict):
         cols_rect = Rect()
 
         for row_num in cell['row_nums']:
-            rows_rect.include_rect(table_dict['rows'][row_num]['pdf_row_bbox'])
+            rows_rect.include_rect(none_to_zero(table_dict['rows'][row_num]['pdf_row_bbox']))
 
         for col_num in cell['column_nums']:
-            cols_rect.include_rect(table_dict['columns'][col_num]['pdf_column_bbox'])
+            cols_rect.include_rect(none_to_zero(table_dict['columns'][col_num]['pdf_column_bbox']))
 
         pdf_bbox = rows_rect.intersect(cols_rect)
         cell['pdf_bbox'] = list(pdf_bbox)
@@ -343,6 +357,8 @@ def merge_group(table_dict, group):
             table_dict['fix'].append('merged oversegmented spanning cell')
     except:
         table_dict['reject'].append("ambiguous spanning cell")
+        if ENABLE_SYNTH:
+            raise
         
         
 def remove_empty_rows(table_dict):
@@ -679,7 +695,11 @@ def canonicalize(table_dict):
                                     'is_projected_row_header': False}
                         table_dict['cells'].append(new_cell)
     except:
-        print(traceback.format_exc())
+        if ENABLE_SYNTH:
+            raise
+        else:
+            print(traceback.format_exc())
+
     for cell in cells_to_delete:
         table_dict['cells'].remove(cell)
         
@@ -750,7 +770,7 @@ def canonicalize(table_dict):
         for column_num in cell['column_nums']:
             for row_num in cell['row_nums']:
                 cell_grid_index[(row_num, column_num)] = cell
-        
+    
     # Go top down, merge any neighboring cells occupying the same columns, whether they are blank or not
     header_groups_by_row_column = defaultdict(list)
     header_groups = []
@@ -868,7 +888,7 @@ def quality_control1(table_dict, page_words):
         if overlap(w[:4], table_bbox) < 0.5:
             continue
         word_overlaps.append(max([overlap(w[:4], cell['pdf_bbox']) for cell in table_dict['cells']]))
-    C = sum(word_overlaps) / len(word_overlaps)
+    C = sum(word_overlaps) / len(word_overlaps) if word_overlaps else 1
     if C < 0.9:
         table_dict['reject'].append("poor text cell fit")
         
@@ -910,7 +930,7 @@ def is_good_bbox(bbox, page_bbox):
     return False
 
 
-def create_document_page_image(doc, page_num, output_image_max_dim=1000):
+def create_document_page_image(doc, page_num, output_image_max_dim):
     page = doc[page_num]
     page_width = page.rect[2]
     page_height = page.rect[3]
@@ -949,7 +969,49 @@ def create_pascal_voc_page_element(image_filename, output_image_width, output_im
     return annotation
 
 
-def create_pascal_voc_object_element(class_name, bbox, page_bbox, output_image_max_dim=1000):
+# def create_pascal_voc_object_element(class_name, bbox, page_bbox, output_image_max_dim=1000):
+#     bbox_area = fitz.Rect(bbox).get_area()
+#     if bbox_area == 0:
+#         raise Exception
+#     intersect_area = fitz.Rect(page_bbox).intersect(fitz.Rect(bbox)).get_area()
+#     if abs(intersect_area - bbox_area) > 0.1:
+#         print(bbox)
+#         print(bbox_area)
+#         print(page_bbox)
+#         print(intersect_area)
+#         raise Exception
+    
+#     object_ = ET.Element("object")
+#     name = ET.SubElement(object_, "name").text = class_name
+#     pose = ET.SubElement(object_, "pose").text = "Frontal"
+#     truncated = ET.SubElement(object_, "truncated").text = "0"
+#     difficult = ET.SubElement(object_, "difficult").text = "0"
+#     occluded = ET.SubElement(object_, "occluded").text = "0"
+#     bndbox = ET.SubElement(object_, "bndbox")
+    
+#     page_width = page_bbox[2] - page_bbox[0]
+#     page_height = page_bbox[3] - page_bbox[1]
+    
+#     if page_width > page_height:
+#         output_image_width = output_image_max_dim
+#         output_image_height = int(output_image_max_dim * page_height / page_width)
+#     else:
+#         output_image_height = output_image_max_dim
+#         output_image_width = int(output_image_max_dim * page_width / page_height)
+
+#     xmin = (bbox[0] - page_bbox[0]) * output_image_width / page_width
+#     ymin = (bbox[1] - page_bbox[1]) * output_image_height / page_height
+#     xmax = (bbox[2] - page_bbox[0]) * output_image_width / page_width
+#     ymax = (bbox[3] - page_bbox[1]) * output_image_height / page_height
+    
+#     ET.SubElement(bndbox, "xmin").text = str(xmin)
+#     ET.SubElement(bndbox, "ymin").text = str(ymin)
+#     ET.SubElement(bndbox, "xmax").text = str(xmax)
+#     ET.SubElement(bndbox, "ymax").text = str(ymax)
+    
+#     return object_
+
+def create_pascal_voc_object_element(class_name, bbox, page_bbox):
     bbox_area = fitz.Rect(bbox).get_area()
     if bbox_area == 0:
         raise Exception
@@ -972,17 +1034,10 @@ def create_pascal_voc_object_element(class_name, bbox, page_bbox, output_image_m
     page_width = page_bbox[2] - page_bbox[0]
     page_height = page_bbox[3] - page_bbox[1]
     
-    if page_width > page_height:
-        output_image_width = output_image_max_dim
-        output_image_height = int(output_image_max_dim * page_height / page_width)
-    else:
-        output_image_height = output_image_max_dim
-        output_image_width = int(output_image_max_dim * page_width / page_height)
-
-    xmin = (bbox[0] - page_bbox[0]) * output_image_width / page_width
-    ymin = (bbox[1] - page_bbox[1]) * output_image_height / page_height
-    xmax = (bbox[2] - page_bbox[0]) * output_image_width / page_width
-    ymax = (bbox[3] - page_bbox[1]) * output_image_height / page_height
+    xmin = (bbox[0] - page_bbox[0])
+    ymin = (bbox[1] - page_bbox[1])
+    xmax = (bbox[2] - page_bbox[0])
+    ymax = (bbox[3] - page_bbox[1])
     
     ET.SubElement(bndbox, "xmin").text = str(xmin)
     ET.SubElement(bndbox, "ymin").text = str(ymin)
@@ -990,7 +1045,6 @@ def create_pascal_voc_object_element(class_name, bbox, page_bbox, output_image_m
     ET.SubElement(bndbox, "ymax").text = str(ymax)
     
     return object_
-
 
 def save_xml_pascal_voc(page_annotation, filepath):
     xmlstr = minidom.parseString(ET.tostring(page_annotation)).toprettyxml(indent="   ")
@@ -1056,8 +1110,33 @@ def get_args():
     parser.add_argument('--test_padding', type=int, default=5,
                         help="The amount of padding to add around a table in the val and test sets when cropping.")
     parser.add_argument('--skip_large', action='store_true')
+    parser.add_argument('--train_samples_to_skip', type=str, help="Comma-separated",
+                        default=','.join(map(str, [48651, 48652, 48659, 48660, 48672, 48673, 48674, 48675, 48691, 48692, 48693, 48694])))
+    parser.add_argument('--val_samples_to_skip', type=str, help="Comma-separated",
+                        default='')
+    parser.add_argument('--test_samples_to_skip', type=str, help="Comma-separated",
+                        default='')
+    parser.add_argument('--detection_filename_format', type=str, default='FinTabNet_1.0.0_table_{split}.jsonl', help="Can be the empty string.")
+    parser.add_argument('--structure_filename_format', type=str, default='FinTabNet_1.0.0_cell_{split}.jsonl')
+    parser.add_argument('--image_dir', type=str, help='Root directory of png images, when available.')
     return parser.parse_args()
 
+def load_json_line(line):
+    data = json.loads(line)
+    if ENABLE_SYNTH:
+        for cell in data['html']['cells']:
+            if 'bbox' in cell:
+                del cell['bbox'][4:]
+        if data['html']['structure']['tokens'] and data['html']['structure']['tokens'][0] != "<table>":
+            data['html']['structure']['tokens'].insert(0, "<table>")
+        if data['html']['structure']['tokens'] and data['html']['structure']['tokens'][-1] != "</table>":
+            data['html']['structure']['tokens'].append("</table>")
+        if 'table_id' not in data:
+            data['table_id'] = data['imgid']
+    return data
+
+def remove_extension(p):
+    return os.path.splitext(p)[0]
 
 def main():
     args = get_args()
@@ -1084,7 +1163,9 @@ def main():
     # These are samples that killed the kernel during processing due to unknown error; likely an OOM issue
     # Skipping these in this script, although they could be added back in the future
     samples_to_skip = defaultdict(set)
-    samples_to_skip['train'] = set([48651, 48652, 48659, 48660, 48672, 48673, 48674, 48675, 48691, 48692, 48693, 48694])
+    samples_to_skip['train'] = set(map(int, utils.split_by_comma(args.train_samples_to_skip)))
+    samples_to_skip['val'] = set(map(int, utils.split_by_comma(args.val_samples_to_skip)))
+    samples_to_skip['test'] = set(map(int, utils.split_by_comma(args.test_samples_to_skip)))
 
     table_count_by_document_id = defaultdict(int)
     file_idx_to_table_idx = dict()
@@ -1096,36 +1177,40 @@ def main():
     fixes = defaultdict(list)
     kept_as_is_count = 0
     save_count = 0
-    output_image_max_dim = 1000
+    output_image_max_dim = 1000 if not args.image_dir else None
 
     do_save = True
     do_break = False
 
-    for subdir in ['val', 'test', 'train']:
+    # for subdir in ['val', 'test', 'train']:
+    for subdir in ['train']:
         if subdir == 'val' or subdir == 'test':
             padding = args.test_padding
         else:
             padding = args.train_padding
 
         print("Processing '{}' samples...".format(subdir))
-        structure_filename = "FinTabNet_1.0.0_cell_" + subdir + ".jsonl"
-        detection_filename = "FinTabNet_1.0.0_table_" + subdir +  ".jsonl"
+        structure_filename = args.structure_filename_format.format(split=subdir)
+        detection_filename = args.detection_filename_format.format(split=subdir)
         structure_filepath = os.path.join(args.data_dir, structure_filename)
-        detection_filepath = os.path.join(args.data_dir, detection_filename)
+        detection_filepath = os.path.join(args.data_dir, detection_filename) if detection_filename else None
 
         with open(structure_filepath, "r") as f:
             structure_lines = f.readlines()
-        with open(detection_filepath, "r") as f:
-            detection_lines = f.readlines()
+        if detection_filepath:
+            with open(detection_filepath, "r") as f:
+                detection_lines = f.readlines()
+        else:
+            detection_lines = []
 
         structure_tables = defaultdict(set)
         for idx, line in enumerate(structure_lines):
-            data = json.loads(line)
+            data = load_json_line(line)
             structure_tables[data['filename']].add(idx)
 
         detection_tables = defaultdict(set)
         for line in detection_lines:
-            data = json.loads(line)
+            data = load_json_line(line)
             detection_tables[data['filename']].add(data['table_id'])
 
         table_count_by_document_id = defaultdict(int)
@@ -1135,15 +1220,15 @@ def main():
         lines = structure_lines
 
         for idx, line in enumerate(lines):
-            data = json.loads(lines[idx])
+            data = load_json_line(lines[idx])
 
-            document_id = "_".join(data['filename'].split(".")[0].split("/"))
+            document_id = "_".join(remove_extension(data['filename']).split("/"))
             file_idx_to_table_idx[idx] = table_count_by_document_id[document_id]
             table_count_by_document_id[document_id] += 1
 
-        file_count = 0
-        for relative_pdf_filepath, idxs in tqdm(structure_tables.items()):
-            file_count += 1
+        structure_table_items = tqdm(structure_tables.items())
+        for relative_pdf_filepath, idxs in structure_table_items:
+            structure_table_items.set_description(relative_pdf_filepath)
             if len(set(idxs).intersection(samples_to_skip[subdir])) > 0:
                 print("SKIPPING {}".format(relative_pdf_filepath))
                 continue
@@ -1161,7 +1246,7 @@ def main():
 
             document_tables = []
             for idx in idxs:
-                data = json.loads(lines[idx])
+                data = load_json_line(lines[idx])
 
                 try:
                     adjust_bbox_coordinates(data, doc)
@@ -1175,7 +1260,7 @@ def main():
                     table_dict['split'] = data['split']
                     table_dict['pdf_file_name'] = data['filename'].split("/")[-1]
                     table_dict['pdf_folder'] = "/".join(data['filename'].split("/")[:-1]) + "/"
-                    table_dict['document_id'] = "_".join(data['filename'].split(".")[0].split("/"))
+                    table_dict['document_id'] = "_".join(remove_extension(data['filename']).split("/"))
                     table_dict['fintabnet_source_file_name'] = filename
                     table_dict['fintabnet_source_line_index'] = idx
                     table_dict['fintabnet_source_table_id'] = data['table_id']
@@ -1270,11 +1355,14 @@ def main():
                     if not has_body:
                         table_dict['reject'].append("no table body")
 
-                    if table_dict['rows'][0]['is_projected_row_header']:
-                        table_dict['reject'].append("bad projected row header")
-                    num_rows = len(table_dict['rows'])
-                    if table_dict['rows'][num_rows-1]['is_projected_row_header']:
-                        table_dict['reject'].append("bad projected row header")
+                    if ENABLE_SYNTH and not table_dict['rows']:
+                        table_dict['reject'].append("rows is empty")
+                    else:
+                        if table_dict['rows'][0]['is_projected_row_header']:
+                            table_dict['reject'].append("bad projected row header")
+                        num_rows = len(table_dict['rows'])
+                        if table_dict['rows'][num_rows-1]['is_projected_row_header']:
+                            table_dict['reject'].append("bad projected row header")
 
                     # Check that everything is properly contained
                     table_bbox = table_dict['pdf_table_bbox']
@@ -1283,19 +1371,22 @@ def main():
                         if (Rect(bbox).get_area() == 0 or bbox[0] >= bbox[2] or bbox[1] >= bbox[3]
                             or overlap(bbox, page_bbox) < 1 or overlap(bbox, table_bbox) < 1):
                             table_dict['reject'].append("bad cell bbox")
-                            raise Exception("Bad cell bbox: {}".format(bbox))
+                            raise Exception("Bad cell bbox: {} for file: {} of split: {} with index: {}".format(bbox, relative_pdf_filepath, split, idx))
 
                     if (Rect(bbox).get_area() == 0 or bbox[0] >= bbox[2] or bbox[1] >= bbox[3]
                         or overlap(table_bbox, page_bbox) < 1):
                         table_dict['reject'].append("bad table bbox")
-                        raise Exception("Bad table bbox: {}".format(table_dict['pdf_table_bbox']))
+                        raise Exception("Bad table bbox: {} for file: {} of split: {} with index: {}".format(table_dict['pdf_table_bbox'], relative_pdf_filepath, split, idx))
                 except KeyboardInterrupt:
                     do_break = True
                     break
                 except:
                     #print(idx)
-                    #print(traceback.format_exc())
                     table_dict['reject'].append('unknown exception')
+                    if ENABLE_SYNTH:
+                        raise
+                    else:
+                        print(traceback.format_exc())
 
                 processed_count += 1
 
@@ -1339,6 +1430,9 @@ def main():
                 with open(save_filepath, 'w') as out_file:
                     json.dump(document_tables, out_file, ensure_ascii=False, indent=4)
 
+            if args.image_dir:
+                if len(document_tables) != 1:
+                    raise Exception("Only one table per PDF is allowed to have pre-specified images.")
             # Create structure PASCAL VOC data
             # output_structure_directory
             for table_dict in document_tables:
@@ -1348,8 +1442,12 @@ def main():
                     continue
                 page_num = table_dict['pdf_page_index']
                 page_rect = list(doc[page_num].rect)
-                scale = output_image_max_dim / max(page_rect)
-                page_img = create_document_page_image(doc, page_num, output_image_max_dim=output_image_max_dim)
+                if args.image_dir:
+                    page_img = Image.open(os.path.join(args.image_dir, split, table_dict["document_id"] + ".png"))
+                    scale = 1
+                else:
+                    page_img = create_document_page_image(doc, page_num, output_image_max_dim=output_image_max_dim)
+                    scale = output_image_max_dim / max(page_rect)
 
                 table_num = table_dict['document_table_index']
                 table_boxes = []      
@@ -1444,6 +1542,7 @@ def main():
                             min(table_img.size[1], bbox[3]-crop_bbox[1]-1)]
                     if (bbox[0] < 0 or bbox[1] < 0 or bbox[2] > table_img.size[0] or bbox[3] > table_img.size[1]
                         or bbox[0] + 1 > bbox[2] or bbox[1] + 1 > bbox[3]):
+                        # print(f"Bad bbox: ${bbox}")
                         bad_box = True
                     entry['bbox'] = bbox
 
@@ -1461,9 +1560,11 @@ def main():
                 for entry in table_boxes:
                     bbox = entry['bbox']
                     # Add to PASCAl VOC
+                    # element = create_pascal_voc_object_element(entry['class_label'],
+                    #                                            entry['bbox'], [0, 0, table_img.size[0], table_img.size[1]],
+                    #                                            output_image_max_dim=max(table_img.size))  
                     element = create_pascal_voc_object_element(entry['class_label'],
-                                                               entry['bbox'], [0, 0, table_img.size[0], table_img.size[1]],
-                                                               output_image_max_dim=max(table_img.size))  
+                                                               entry['bbox'], [0, 0, table_img.size[0], table_img.size[1]])
                     table_annotation.append(element)              
 
                 if do_save:

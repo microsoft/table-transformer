@@ -7,6 +7,7 @@ Mostly copy-paste from torchvision references.
 import os
 import subprocess
 import time
+import re
 from collections import defaultdict, deque
 import datetime
 import pickle
@@ -67,15 +68,15 @@ class SmoothedValue(object):
 
     @property
     def global_avg(self):
-        return self.total / self.count
+        return self.total / self.count if self.count else 0
 
     @property
     def max(self):
-        return max(self.deque)
+        return max(self.deque, default=0)
 
     @property
     def value(self):
-        return self.deque[-1]
+        return self.deque[-1] if self.deque else 0
 
     def __str__(self):
         return self.fmt.format(
@@ -243,7 +244,7 @@ class MetricLogger(object):
         total_time = time.time() - start_time
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
         print('{} Total time: {} ({:.4f} s / it)'.format(
-            header, total_time_str, total_time / len(iterable)))
+            header, total_time_str, total_time / len(iterable) if iterable else 0))
 
 
 def get_sha():
@@ -466,3 +467,7 @@ def interpolate(input, size=None, scale_factor=None, mode="nearest", align_corne
         return _new_empty_tensor(input, output_shape)
     else:
         return torchvision.ops.misc.interpolate(input, size, scale_factor, mode, align_corners)
+
+
+def split_by_comma(s):
+    return re.split(r"\s*,\s*", s) if s else []

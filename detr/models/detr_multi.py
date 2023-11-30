@@ -136,6 +136,8 @@ class SetCriterion(nn.Module):
         tgt_lengths = torch.as_tensor([len(v["labels"]) for v in targets], device=device)
         # Count the number of predictions that are NOT "no-object" (which is the last class)
         card_pred = (pred_logits.argmax(-1) != pred_logits.shape[-1] - 1).sum(1)
+        # If target is empty marked as incomplete, then there could be objects which were missed.
+        # So to allow incomplete targets ignore all incomplete entries with empty target.
         card_err = F.l1_loss(card_pred.float(), tgt_lengths.float())
         losses = {'cardinality_error': card_err}
         return losses

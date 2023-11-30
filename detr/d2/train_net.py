@@ -8,7 +8,7 @@ import os
 import sys
 
 # fmt: off
-sys.path.insert(1, os.path.join(sys.path[0], '..'))
+sys.path.insert(1, os.path.dirname(sys.path[0]))
 # fmt: on
 
 import time
@@ -100,6 +100,7 @@ class Trainer(DefaultTrainer):
                 lr = lr * cfg.SOLVER.BACKBONE_MULTIPLIER
             params += [{"params": [value], "lr": lr, "weight_decay": weight_decay}]
 
+        assert False
         optimizer_type = cfg.SOLVER.OPTIMIZER
         if optimizer_type == "SGD":
             optimizer = torch.optim.SGD(params, cfg.SOLVER.BASE_LR, momentum=cfg.SOLVER.MOMENTUM)

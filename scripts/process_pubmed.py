@@ -160,7 +160,7 @@ def extract_text_from_spans(spans, join_with_space=True, remove_integer_superscr
         for span in spans:
             flags = span['flags']
             if flags & 2**0: # superscript flag
-                if is_int(span['text']):
+                if span['text'].isdigit():
                     spans_copy.remove(span)
                 else:
                     span['superscript'] = True

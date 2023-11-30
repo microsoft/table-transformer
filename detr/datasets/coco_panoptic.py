@@ -76,6 +76,8 @@ class CocoPanoptic:
         width = img_info['width']
         return height, width
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}({', '.join([f'{k}={v!r}' for k, v in self.__dict__.items() if not k.startswith('_')])})"
 
 def build(image_set, args):
     img_folder_root = Path(args.coco_path)
@@ -94,6 +96,6 @@ def build(image_set, args):
     ann_file = ann_folder_root / ann_file
 
     dataset = CocoPanoptic(img_folder_path, ann_folder, ann_file,
-                           transforms=make_coco_transforms(image_set), return_masks=args.masks)
+                           transforms=make_coco_transforms(image_set, enable_bounds), return_masks=args.masks)
 
     return dataset

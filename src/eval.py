@@ -9,16 +9,16 @@ import statistics as stat
 from datetime import datetime
 import multiprocessing
 from itertools import repeat
-from functools import partial
-import tqdm
 import math
+import re
+import errno
+import time
 
 import torch
 from torchvision import transforms
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from fitz import Rect
 from PIL import Image
 
 sys.path.append("../detr")
@@ -487,9 +487,12 @@ def eval_tsr_sample(target, pred_logits, pred_bboxes, mode):
 
 def visualize(args, target, pred_logits, pred_bboxes):
     img_filepath = target["img_path"]
+    if not re.compile(args.debug_img_path_re_filter).fullmatch(img_filepath):
+        return
     img_filename = img_filepath.split("/")[-1]
 
-    bboxes_out_filename = img_filename.replace(".jpg", "_bboxes.jpg")
+    # bboxes_out_filename = img_filename.replace(".jpg", "_bboxes.jpg")
+    bboxes_out_filename = re.sub(r"\.[^.]*$", ".jpg", img_filename)
     bboxes_out_filepath = os.path.join(args.debug_save_dir, bboxes_out_filename)
 
     img = Image.open(img_filepath)
@@ -563,7 +566,7 @@ def visualize(args, target, pred_logits, pred_bboxes):
             ax.add_patch(rect)
             rect = patches.Rectangle(bbox[:2], bbox[2]-bbox[0], bbox[3]-bbox[1], linewidth=1, 
                                     edgecolor="magenta",facecolor='none',linestyle="--")
-            ax.add_patch(rect) 
+            ax.add_patch(rect)
 
         fig.set_size_inches((15, 15))
         plt.axis('off')
@@ -590,7 +593,7 @@ def evaluate(args, model, criterion, postprocessors, data_loader, base_ds, devic
         pred_logits_collection = []
         pred_bboxes_collection = []
         targets_collection = []
-        
+    
     num_batches = len(data_loader)
     print_every = max(args.eval_step, int(math.ceil(num_batches / 100)))
     batch_num = 0
@@ -646,7 +649,7 @@ def evaluate(args, model, criterion, postprocessors, data_loader, base_ds, devic
             if batch_num % args.eval_step == 0 or batch_num == num_batches:
                 arguments = zip(targets_collection, pred_logits_collection, pred_bboxes_collection,
                                 repeat(args.mode))
-                with multiprocessing.Pool(args.eval_pool_size) as pool:
+                with multiprocessing.get_context('spawn').Pool(args.eval_pool_size) as pool:
                     metrics = pool.starmap_async(eval_tsr_sample, arguments).get()
                 tsr_metrics += metrics
                 pred_logits_collection = []
@@ -667,6 +670,14 @@ def evaluate(args, model, criterion, postprocessors, data_loader, base_ds, devic
     if coco_evaluator is not None:
         if 'bbox' in postprocessors.keys():
             stats['coco_eval_bbox'] = coco_evaluator.coco_eval['bbox'].stats.tolist()
+        if args.coco_eval_prefix:
+            try:
+                os.makedirs(os.path.dirname(args.coco_eval_prefix))
+            except OSError as exc: # Guard against race condition
+                if exc.errno != errno.EEXIST:
+                    raise
+            for k, v in coco_evaluator.coco_eval.items():
+                torch.save(v.eval, "{}_{}.pt".format(args.coco_eval_prefix, k))
 
     if args.data_type == "structure":
         # Save sample-level metrics for more analysis
@@ -684,15 +695,18 @@ def evaluate(args, model, criterion, postprocessors, data_loader, base_ds, devic
 
     return stats, coco_evaluator
 
-
 def eval_coco(args, model, criterion, postprocessors, data_loader_test, dataset_test, device):
     """
     Use this function to do COCO evaluation. Default implementation runs it on
     the test set.
     """
-    pubmed_stats, coco_evaluator = evaluate(args, model, criterion, postprocessors,
+    pubmed_stats, _ = evaluate(args, model, criterion, postprocessors,
                                             data_loader_test, dataset_test,
                                             device)
     print("COCO metrics summary: AP50: {:.3f}, AP75: {:.3f}, AP: {:.3f}, AR: {:.3f}".format(
         pubmed_stats['coco_eval_bbox'][1], pubmed_stats['coco_eval_bbox'][2],
         pubmed_stats['coco_eval_bbox'][0], pubmed_stats['coco_eval_bbox'][8]))
+
+def eval_cocos(args, model, criterion, postprocessors, dataset_test_loaders, device):
+    for dataset_test, data_loader_test in dataset_test_loaders:
+        eval_coco(args, model, criterion, postprocessors, data_loader_test, dataset_test, device)

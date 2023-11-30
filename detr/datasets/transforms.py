@@ -11,12 +11,22 @@ import torchvision.transforms.functional as F
 
 from util.box_ops import box_xyxy_to_cxcywh
 from util.misc import interpolate
+from util import box_ops
 
+def compute_area(boxes):
+    return (boxes[:, 1, :] - boxes[:, 0, :]).prod(dim=1)
 
-def crop(image, target, region):
+def compute_area_with_bounds_and_presence(boxes, present_inside, present_outside):
+    area = compute_area(boxes)
+    area[~present_inside] = 0
+    area_outside = (boxes[:, 3, :] - boxes[:, 2, :]).prod(dim=1)
+    area_outside[~present_outside] = 0
+    return torch.max(area, area_outside)
+
+def crop(image, original_target, region, enable_bounds):
     cropped_image = F.crop(image, *region)
 
-    target = target.copy()
+    target = original_target.copy()
     i, j, h, w = region
 
     # should we do something wrt the original size?
@@ -27,12 +37,26 @@ def crop(image, target, region):
     if "boxes" in target and len(target["boxes"]) > 0:
         boxes = target["boxes"]
         max_size = torch.as_tensor([w, h], dtype=torch.float32)
-        cropped_boxes = boxes - torch.as_tensor([j, i, j, i])
-        cropped_boxes = torch.min(cropped_boxes.reshape(-1, 2, 2), max_size)
+        subtrahend = torch.as_tensor([j, i, j, i])
+        if enable_bounds:
+            # Present/Empty status remains unchanged.
+            subtrahend = torch.cat((subtrahend, subtrahend))
+        cropped_boxes = boxes - subtrahend
+        if enable_bounds:
+            present_inside = box_ops.is_present(cropped_boxes[:, :4])
+            present_outside = box_ops.is_present(cropped_boxes[:, 4:])
+        # Next operations can make a non-present box present again.
+        cropped_boxes = torch.min(cropped_boxes.reshape(
+            -1, 4 if enable_bounds else 2, 2), max_size)
         cropped_boxes = cropped_boxes.clamp(min=0)
-        area = (cropped_boxes[:, 1, :] - cropped_boxes[:, 0, :]).prod(dim=1)
-        target["boxes"] = cropped_boxes.reshape(-1, 4)
-        target["area"] = area
+        reshaped_cropped_boxes = cropped_boxes.reshape(-1, 8 if enable_bounds else 4)
+        if enable_bounds:
+            # Rectify non-present boxes.
+            reshaped_cropped_boxes[:, :4][box_ops.is_present(reshaped_cropped_boxes[:, :4]) & ~present_inside] = box_ops.MISSING_BOX
+            reshaped_cropped_boxes[:, 4:][box_ops.is_present(reshaped_cropped_boxes[:, 4:]) & ~present_outside] = box_ops.MISSING_BOX
+        target["boxes"] = reshaped_cropped_boxes
+        target["area"] = compute_area_with_bounds_and_presence(
+            cropped_boxes, present_inside, present_outside) if enable_bounds else compute_area(cropped_boxes)
         fields.append("boxes")
 
     if "masks" in target:
@@ -45,8 +69,10 @@ def crop(image, target, region):
         # favor boxes selection when defining which elements to keep
         # this is compatible with previous implementation
         if "boxes" in target and len(target["boxes"]) > 0:
-            cropped_boxes = target['boxes'].reshape(-1, 2, 2)
+            cropped_boxes = target['boxes'].reshape(-1, 4 if enable_bounds else 2, 2)
             keep = torch.all(cropped_boxes[:, 1, :] > cropped_boxes[:, 0, :], dim=1)
+            if enable_bounds:
+                keep += torch.all(cropped_boxes[:, 3, :] > cropped_boxes[:, 2, :], dim=1)
         else:
             keep = target['masks'].flatten(1).any(1)
 
@@ -56,7 +82,7 @@ def crop(image, target, region):
     return cropped_image, target
 
 
-def hflip(image, target):
+def hflip(image, target, enable_bounds):
     flipped_image = F.hflip(image)
 
     w, h = image.size
@@ -64,7 +90,16 @@ def hflip(image, target):
     target = target.copy()
     if "boxes" in target and len(target["boxes"]) > 0:
         boxes = target["boxes"]
-        boxes = boxes[:, [2, 1, 0, 3]] * torch.as_tensor([-1, 1, -1, 1]) + torch.as_tensor([w, 0, w, 0])
+        indices = [2, 1, 0, 3]
+        if enable_bounds:
+            indices += [4 + x for x in indices]
+        factor = torch.as_tensor([-1, 1, -1, 1])
+        if enable_bounds:
+            factor = torch.cat((factor, factor))
+        offset = torch.as_tensor([w, 0, w, 0])
+        if enable_bounds:
+            offset = torch.cat((offset, offset))
+        boxes = boxes[:, indices] * factor + offset
         target["boxes"] = boxes
 
     if "masks" in target:
@@ -73,10 +108,10 @@ def hflip(image, target):
     return flipped_image, target
 
 
-def resize(image, target, size, max_size=None):
+def resize(image, target, size, max_size, enable_bounds):
     # size can be min_size (scalar) or (w, h) tuple
 
-    def get_size_with_aspect_ratio(image_size, size, max_size=None):
+    def get_size_with_aspect_ratio(image_size, size, max_size):
         w, h = image_size
         if max_size is not None:
             min_original_size = float(min((w, h)))
@@ -114,7 +149,10 @@ def resize(image, target, size, max_size=None):
     target = target.copy()
     if "boxes" in target and len(target["boxes"]) > 0:
         boxes = target["boxes"]
-        scaled_boxes = boxes * torch.as_tensor([ratio_width, ratio_height, ratio_width, ratio_height])
+        factor = torch.as_tensor([ratio_width, ratio_height, ratio_width, ratio_height])
+        if enable_bounds:
+            factor = torch.cat(factor, factor)
+        scaled_boxes = boxes * factor
         target["boxes"] = scaled_boxes
 
     if "area" in target:
@@ -146,57 +184,62 @@ def pad(image, target, padding):
 
 
 class RandomCrop(object):
-    def __init__(self, size):
+    def __init__(self, size, enable_bounds):
         self.size = size
+        self.enable_bounds = enable_bounds
 
     def __call__(self, img, target):
         region = T.RandomCrop.get_params(img, self.size)
-        return crop(img, target, region)
+        return crop(img, target, region, self.enable_bounds)
 
 
 class RandomSizeCrop(object):
-    def __init__(self, min_size: int, max_size: int):
+    def __init__(self, min_size: int, max_size: int, enable_bounds: bool):
         self.min_size = min_size
         self.max_size = max_size
+        self.enable_bounds = enable_bounds
 
     def __call__(self, img: PIL.Image.Image, target: dict):
         w = random.randint(self.min_size, min(img.width, self.max_size))
         h = random.randint(self.min_size, min(img.height, self.max_size))
         region = T.RandomCrop.get_params(img, [h, w])
-        return crop(img, target, region)
+        return crop(img, target, region, self.enable_bounds)
 
 
 class CenterCrop(object):
-    def __init__(self, size):
+    def __init__(self, size, enable_bounds):
         self.size = size
+        self.enable_bounds = enable_bounds
 
     def __call__(self, img, target):
         image_width, image_height = img.size
         crop_height, crop_width = self.size
         crop_top = int(round((image_height - crop_height) / 2.))
         crop_left = int(round((image_width - crop_width) / 2.))
-        return crop(img, target, (crop_top, crop_left, crop_height, crop_width))
+        return crop(img, target, (crop_top, crop_left, crop_height, crop_width), self.enable_bounds)
 
 
 class RandomHorizontalFlip(object):
-    def __init__(self, p=0.5):
+    def __init__(self, p, enable_bounds):
         self.p = p
+        self.enable_bounds = enable_bounds
 
     def __call__(self, img, target):
         if random.random() < self.p:
-            return hflip(img, target)
+            return hflip(img, target, self.enable_bounds)
         return img, target
 
 
 class RandomResize(object):
-    def __init__(self, sizes, max_size=None):
+    def __init__(self, sizes, max_size, enable_bounds):
         assert isinstance(sizes, (list, tuple))
         self.sizes = sizes
         self.max_size = max_size
+        self.enable_bounds = enable_bounds
 
     def __call__(self, img, target=None):
         size = random.choice(self.sizes)
-        return resize(img, target, size, self.max_size)
+        return resize(img, target, size, self.max_size, self.enable_bounds)
 
 
 class RandomPad(object):
@@ -221,13 +264,20 @@ class RandomSelect(object):
 
     def __call__(self, img, target):
         if random.random() < self.p:
-            return self.transforms1(img, target)
-        return self.transforms2(img, target)
+            image, tgt = self.transforms1(img, target)
+            return image, tgt
+        image, tgt = self.transforms2(img, target)
+        return image, tgt
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}({', '.join([f'{k}={v!r}' for k, v in self.__dict__.items() if not k.startswith('_')])})"
 
 class ToTensor(object):
     def __call__(self, img, target):
         return F.to_tensor(img), target
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({', '.join([f'{k}={v!r}' for k, v in self.__dict__.items() if not k.startswith('_')])})"
 
 
 class RandomErasing(object):
@@ -240,9 +290,10 @@ class RandomErasing(object):
 
 
 class Normalize(object):
-    def __init__(self, mean, std):
+    def __init__(self, mean, std, enable_bounds):
         self.mean = mean
         self.std = std
+        self.enable_bounds = enable_bounds
 
     def __call__(self, image, target=None):
         image = F.normalize(image, mean=self.mean, std=self.std)
@@ -252,10 +303,17 @@ class Normalize(object):
         h, w = image.shape[-2:]
         if "boxes" in target and len(target["boxes"]) > 0:
             boxes = target["boxes"]
-            boxes = box_xyxy_to_cxcywh(boxes)
-            boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
+            if self.enable_bounds:
+                boxes = torch.cat((box_xyxy_to_cxcywh(boxes[:, :4]), box_xyxy_to_cxcywh(boxes[:, 4:])), dim=1)
+                boxes = boxes / torch.tensor([w, h, w, h] * 2, dtype=torch.float32)
+            else:
+                boxes = box_xyxy_to_cxcywh(boxes)
+                boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
             target["boxes"] = boxes
         return image, target
+    
+    def __repr__(self):
+        return f"{self.__class__.__name__}({', '.join([f'{k}={v!r}' for k, v in self.__dict__.items() if not k.startswith('_')])})"
 
 
 class Compose(object):

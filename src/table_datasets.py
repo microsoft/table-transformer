@@ -2,6 +2,7 @@
 Copyright (C) 2021 Microsoft Corporation
 """
 import os
+import os.path
 import sys
 import random
 import xml.etree.ElementTree as ET
@@ -14,28 +15,59 @@ from PIL import Image, ImageFilter
 import torch
 from torchvision import transforms
 from torchvision.transforms import functional as F
+import re
+import collections
 
 # Project imports
 sys.path.append("detr")
 import datasets.transforms as R
+from util import box_ops
 
+_PATTERN = re.compile(r"(.*) (\S+) ([io])")
 
-def read_pascal_voc(xml_file: str, class_map=None):
+def convert_to_bounds(label_bbox_pairs):
+    default_missing_box = box_ops.MISSING_BOX.tolist()
+    d = collections.defaultdict(
+        lambda: collections.defaultdict(
+            lambda: [default_missing_box, default_missing_box]))
+    normal_pairs = []
+    for label, bbox in label_bbox_pairs:
+        m = _PATTERN.fullmatch(label)
+        if not m:
+            normal_pairs.append((label, bbox * 2))
+            continue
+        assert m.group(3) in ["i", "o"]
+        outside = m.group(3) == "o"
+        io = d[m.group(1)][m.group(2)]
+        assert io[outside] == default_missing_box
+        io[outside] = bbox
+    pairs = []
+    for label, id2io in d.items():
+        for _, io in id2io.items():
+            assert len(io) == 2
+            assert io[0]
+            assert io[1]
+            pairs.append((label, sum(io, [])))
+    pairs.extend(normal_pairs)
+    return pairs
+assert(
+    convert_to_bounds([("row", [1, 2, 3, 4])]) == [('row', [1, 2, 3, 4, 1, 2, 3, 4])])
+assert(
+    convert_to_bounds([("row f o", [5, 6, 7, 8]), ("row f i", [11, 12, 13, 14])]) == [('row', [11, 12, 13, 14, 5, 6, 7, 8])])
+assert(
+    convert_to_bounds([("row f o", [5, 6, 7, 8])]) == [('row', [5, 5, 4, 5, 5, 6, 7, 8])]
+)
+
+def read_pascal_voc(xml_file: str, class_map, enable_bounds):
 
     tree = ET.parse(xml_file)
     root = tree.getroot()
 
-    bboxes = []
-    labels = []
-
+    pairs = []
     for object_ in root.iter('object'):
         ymin, xmin, ymax, xmax = None, None, None, None
         
         label = object_.find("name").text
-        try:
-            label = int(label)
-        except:
-            label = int(class_map[label])
 
         for box in object_.findall("bndbox"):
             ymin = float(box.find("ymin").text)
@@ -44,40 +76,51 @@ def read_pascal_voc(xml_file: str, class_map=None):
             xmax = float(box.find("xmax").text)
 
         bbox = [xmin, ymin, xmax, ymax] # PASCAL VOC
+        pairs.append((label, bbox))
         
+    if enable_bounds:
+        pairs = convert_to_bounds(pairs)
+        
+    bboxes = []
+    labels = []
+    for label, bbox in pairs:
+        try:
+            label = int(label)
+        except:
+            label = int(class_map[label])
         bboxes.append(bbox)
         labels.append(label)
 
     return bboxes, labels
 
-def crop_around_bbox_coco(image, crop_bbox, max_margin, target):
-    width, height = image.size
-    left = max(1, int(round(crop_bbox[0] - max_margin * random.random())))
-    top = max(1, int(round(crop_bbox[1] - max_margin * random.random())))
-    right = min(width, int(round(crop_bbox[2] + max_margin * random.random())))
-    bottom = min(height, int(round(crop_bbox[3] + max_margin * random.random())))
-    cropped_image = image.crop((left, top, right, bottom))
-    cropped_bboxes = []
-    cropped_labels = []
-    for bbox, label in zip(target["boxes"], target["labels"]):
-        bbox = list_bbox_cxcywh_to_xyxy(bbox)
-        bbox = [max(bbox[0], left) - left,
-                max(bbox[1], top) - top,
-                min(bbox[2], right) - left,
-                min(bbox[3], bottom) - top]
-        if bbox[0] < bbox[2] and bbox[1] < bbox[3]:
-            bbox = list_bbox_xyxy_to_cxcywh(bbox)
-            cropped_bboxes.append(bbox)
-            cropped_labels.append(label)
+# def crop_around_bbox_coco(image, crop_bbox, max_margin, target):
+#     width, height = image.size
+#     left = max(1, int(round(crop_bbox[0] - max_margin * random.random())))
+#     top = max(1, int(round(crop_bbox[1] - max_margin * random.random())))
+#     right = min(width, int(round(crop_bbox[2] + max_margin * random.random())))
+#     bottom = min(height, int(round(crop_bbox[3] + max_margin * random.random())))
+#     cropped_image = image.crop((left, top, right, bottom))
+#     cropped_bboxes = []
+#     cropped_labels = []
+#     for bbox, label in zip(target["boxes"], target["labels"]):
+#         bbox = list_bbox_cxcywh_to_xyxy(bbox)
+#         bbox = [max(bbox[0], left) - left,
+#                 max(bbox[1], top) - top,
+#                 min(bbox[2], right) - left,
+#                 min(bbox[3], bottom) - top]
+#         if bbox[0] < bbox[2] and bbox[1] < bbox[3]:
+#             bbox = list_bbox_xyxy_to_cxcywh(bbox)
+#             cropped_bboxes.append(bbox)
+#             cropped_labels.append(label)
 
-    if len(cropped_bboxes) > 0:
-        target["boxes"] = torch.as_tensor(cropped_bboxes, dtype=torch.float32)
-        target["labels"] = torch.as_tensor(cropped_labels, dtype=torch.int64)
-        w, h = img.size
-        target["size"] = torch.tensor([w, h])
-        return cropped_image, target
+#     if len(cropped_bboxes) > 0:
+#         target["boxes"] = torch.as_tensor(cropped_bboxes, dtype=torch.float32)
+#         target["labels"] = torch.as_tensor(cropped_labels, dtype=torch.int64)
+#         w, h = img.size
+#         target["size"] = torch.tensor([w, h])
+#         return cropped_image, target
                  
-    return image, target
+#     return image, target
 
 
 def _flip_coco_person_keypoints(kps, width):
@@ -90,18 +133,18 @@ def _flip_coco_person_keypoints(kps, width):
     return flipped_data
 
 
-def box_cxcywh_to_xyxy(x):
-    x_c, y_c, w, h = x.unbind(-1)
-    b = [(x_c - 0.5 * w), (y_c - 0.5 * h),
-         (x_c + 0.5 * w), (y_c + 0.5 * h)]
-    return torch.stack(b, dim=-1)
+# def box_cxcywh_to_xyxy(x):
+#     x_c, y_c, w, h = x.unbind(-1)
+#     b = [(x_c - 0.5 * w), (y_c - 0.5 * h),
+#          (x_c + 0.5 * w), (y_c + 0.5 * h)]
+#     return torch.stack(b, dim=-1)
 
 
-def box_xyxy_to_cxcywh(x):
-    x0, y0, x1, y1 = x.unbind(-1)
-    b = [(x0 + x1) / 2, (y0 + y1) / 2,
-         (x1 - x0), (y1 - y0)]
-    return torch.stack(b, dim=-1)
+# def box_xyxy_to_cxcywh(x):
+#     x0, y0, x1, y1 = x.unbind(-1)
+#     b = [(x0 + x1) / 2, (y0 + y1) / 2,
+#          (x1 - x0), (y1 - y0)]
+#     return torch.stack(b, dim=-1)
 
 
 class Compose(object):
@@ -115,8 +158,9 @@ class Compose(object):
 
 
 class RandomHorizontalFlip(object):
-    def __init__(self, prob):
+    def __init__(self, prob, enable_bounds):
         self.prob = prob
+        self.enable_bounds = enable_bounds
 
     def __call__(self, image, target):
         if random.random() < self.prob:
@@ -124,6 +168,8 @@ class RandomHorizontalFlip(object):
             image = image.flip(-1)
             bbox = target["boxes"]
             bbox[:, [0, 2]] = width - bbox[:, [2, 0]]
+            if self.enable_bounds:
+                bbox[:, [4, 6]] = width - bbox[:, [6, 4]]
             target["boxes"] = bbox
             if "masks" in target:
                 target["masks"] = target["masks"].flip(-1)
@@ -135,14 +181,17 @@ class RandomHorizontalFlip(object):
     
     
 class RandomCrop(object):
-    def __init__(self, prob, left_scale, top_scale, right_scale, bottom_scale):
+    def __init__(self, prob, left_scale, top_scale, right_scale, bottom_scale, enable_bounds):
+        assert False
         self.prob = prob
         self.left_scale = left_scale
         self.top_scale = top_scale
         self.right_scale = right_scale
         self.bottom_scale = bottom_scale
+        self.enable_bounds = enable_bounds
 
     def __call__(self, image, target):
+        assert False
         if random.random() < self.prob:
             width, height = image.size
             left = int(math.floor(width * 0.5 * self.left_scale * random.random()))
@@ -162,7 +211,7 @@ class RandomCrop(object):
                     cropped_labels.append(label)
                          
             if len(cropped_bboxes) > 0:
-                target["boxes"] = torch.as_tensor(cropped_bboxes, dtype=torch.float32)
+                target["boxes"] = torch.as_tensor(cropped_bboxes, dtype=torch.float32).reshape(-1, 8 if self.enable_bounds else 4)
                 target["labels"] = torch.as_tensor(cropped_labels, dtype=torch.int64)
                 return cropped_image, target
 
@@ -183,12 +232,15 @@ class RandomBlur(object):
     
     
 class RandomResize(object):
-    def __init__(self, prob, min_scale_factor, max_scale_factor):
+    def __init__(self, prob, min_scale_factor, max_scale_factor, enable_bounds):
+        assert False
         self.prob = prob
         self.min_scale_factor = min_scale_factor
         self.max_scale_factor = max_scale_factor
+        self.enable_bounds = enable_bounds
 
     def __call__(self, image, target):
+        assert False
         if random.random() < self.prob:
             prob = random.random()
             scale_factor = prob*self.max_scale_factor + (1-prob)*self.min_scale_factor
@@ -204,30 +256,30 @@ class RandomResize(object):
                     resized_labels.append(label)
                          
             if len(resized_bboxes) > 0:
-                target["boxes"] = torch.as_tensor(resized_bboxes, dtype=torch.float32)
+                target["boxes"] = torch.as_tensor(resized_bboxes, dtype=torch.float32).reshape(-1, 8 if self.enable_bounds else 4)
                 target["labels"] = torch.as_tensor(resized_labels, dtype=torch.int64)
                 return resized_image, target
 
         return image, target
     
 
-class Normalize(object):
-    def __init__(self, mean, std):
-        self.mean = mean
-        self.std = std
+# class Normalize(object):
+#     def __init__(self, mean, std):
+#         self.mean = mean
+#         self.std = std
 
-    def __call__(self, image, target=None):
-        image = F.normalize(image, mean=self.mean, std=self.std)
-        if target is None:
-            return image, None
-        target = target.copy()
-        h, w = image.shape[-2:]
-        if "boxes" in target:
-            boxes = target["boxes"]
-            boxes = box_xyxy_to_cxcywh(boxes)
-            boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
-            target["boxes"] = boxes
-        return image, target
+#     def __call__(self, image, target=None):
+#         image = F.normalize(image, mean=self.mean, std=self.std)
+#         if target is None:
+#             return image, None
+#         target = target.copy()
+#         h, w = image.shape[-2:]
+#         if "boxes" in target:
+#             boxes = target["boxes"]
+#             boxes = box_xyxy_to_cxcywh(boxes)
+#             boxes = boxes / torch.tensor([w, h, w, h], dtype=torch.float32)
+#             target["boxes"] = boxes
+#         return image, target
 
 
 class ToTensor(object):
@@ -237,42 +289,65 @@ class ToTensor(object):
 
 
 class TightAnnotationCrop(object):
-    def __init__(self, labels, left_max_pad, top_max_pad, right_max_pad, bottom_max_pad):
+    def __init__(self, labels, left_max_pad, top_max_pad, right_max_pad, bottom_max_pad, enable_bounds):
         self.labels = set(labels)
         self.left_max_pad = left_max_pad
         self.top_max_pad = top_max_pad
         self.right_max_pad = right_max_pad
         self.bottom_max_pad = bottom_max_pad
+        self.enable_bounds = enable_bounds
 
     def __call__(self, img: PIL.Image.Image, target: dict):
         w, h = target['size']
         bboxes = [bbox for label, bbox in zip(target['labels'], target['boxes']) if label.item() in self.labels]
-        if len(bboxes) > 0:                    
+        if len(bboxes) > 0:
             object_num = random.randint(0, len(bboxes)-1)
             left = random.randint(0, self.left_max_pad)
             top = random.randint(0, self.top_max_pad)
             right = random.randint(0, self.right_max_pad)
             bottom = random.randint(0, self.bottom_max_pad)
-            bbox = bboxes[object_num].tolist()
+            bbox_tensor = bboxes[object_num]
             #target["crop_orig_size"] = torch.tensor([bbox[3]-bbox[1]+y_margin*2, bbox[2]-bbox[0]+x_margin*2])
             #target["crop_orig_offset"] = torch.tensor([bbox[0]-x_margin, bbox[1]-y_margin])
+            if self.enable_bounds:
+                assert bbox_tensor.shape == (8, )
+                present = []
+                if box_ops.is_present(bbox_tensor[:4]).item():
+                    present.append(bbox_tensor[:4])
+                # Probably we do not need the inner boundary here but it seems safer to include it.
+                if box_ops.is_present(bbox_tensor[4:]).item():
+                    present.append(bbox_tensor[4:])
+                if not box_ops:
+                    return img, target
+                stack = torch.stack(present)
+                bbox = torch.cat((stack[:, :2].min(dim=0)[0], stack[:, 2:].max(dim=0)[0]))
+                if bbox.isfinite().all():
+                    bbox = bbox.tolist()
+                else:
+                    return img, target
+            else:
+                bbox = bbox_tensor.tolist()
             region = [bbox[0], bbox[1], bbox[2]-bbox[0], bbox[3]-bbox[1]]
             # transpose and add margin
             region = [region[1]-top, region[0]-left, region[3]+top+bottom, region[2]+left+right]
+            # print("region: {}".format(region))
             region = [round(elem) for elem in region]
-            return R.crop(img, target, region)
+            return R.crop(img, target, region, self.enable_bounds)
         else:
             return img, target
 
 class RandomCrop(object):
-    def __init__(self, prob, left_pixels, top_pixels, right_pixels, bottom_pixels):
+    def __init__(self, prob, left_pixels, top_pixels, right_pixels, bottom_pixels, enable_bounds):
+        assert False
         self.prob = prob
         self.left_pixels= left_pixels
         self.top_pixels = top_pixels
         self.right_pixels = right_pixels
         self.bottom_pixels = bottom_pixels
+        self.enable_bounds = enable_bounds
 
     def __call__(self, image, target):
+        assert False
         if random.random() < self.prob:
             width, height = image.size
             left = random.randint(0, self.left_pixels)
@@ -292,19 +367,20 @@ class RandomCrop(object):
                     cropped_labels.append(label)
                          
             if len(cropped_bboxes) > 0:
-                target["boxes"] = torch.as_tensor(cropped_bboxes, dtype=torch.float32)
+                target["boxes"] = torch.as_tensor(cropped_bboxes, dtype=torch.float32).reshape(-1, 8 if self.enable_bounds else 4)
                 target["labels"] = torch.as_tensor(cropped_labels, dtype=torch.int64)
                 return cropped_image, target
 
         return image, target
 
 class RandomPercentageCrop(object):
-    def __init__(self, prob, left_scale, top_scale, right_scale, bottom_scale):
+    def __init__(self, prob, left_scale, top_scale, right_scale, bottom_scale, enable_bounds):
         self.prob = prob
         self.left_scale = left_scale
         self.top_scale = top_scale
         self.right_scale = right_scale
         self.bottom_scale = bottom_scale
+        self.enable_bounds = enable_bounds
 
     def __call__(self, image, target):
         if random.random() < self.prob:
@@ -317,16 +393,30 @@ class RandomPercentageCrop(object):
             cropped_bboxes = []
             cropped_labels = []
             for bbox, label in zip(target["boxes"], target["labels"]):
-                bbox = [max(bbox[0], left) - left,
+                # assert len(bbox.shape) == 2, bbox.shape
+                # assert bbox.shape[1] == 4
+                bbox_inside = [max(bbox[0], left) - left,
                         max(bbox[1], top) - top,
                         min(bbox[2], right) - left,
                         min(bbox[3], bottom) - top]
-                if bbox[0] < bbox[2] and bbox[1] < bbox[3]:
-                    cropped_bboxes.append(bbox)
+                # assert bbox_inside[0] <= bbox_inside[2], bbox_inside
+                # assert bbox_inside[1] <= bbox_inside[3], bbox_inside
+                if self.enable_bounds:
+                    bbox_outside = [max(bbox[4], left) - left,
+                        max(bbox[5], top) - top,
+                        min(bbox[6], right) - left,
+                        min(bbox[7], bottom) - top]
+                if (bbox_inside[0] < bbox_inside[2] and bbox_inside[1] < bbox_inside[3]) or (
+                    self.enable_bounds and bbox_outside[0] < bbox_outside[2] and bbox_outside[1] < bbox_outside[3]
+                ):
+                    b = bbox_inside
+                    if self.enable_bounds:
+                        b += bbox_outside
+                    cropped_bboxes.append(b)
                     cropped_labels.append(label)
-                         
+
             if len(cropped_bboxes) > 0:
-                target["boxes"] = torch.as_tensor(cropped_bboxes, dtype=torch.float32)
+                target["boxes"] = torch.as_tensor(cropped_bboxes, dtype=torch.float32).reshape(-1, 8 if self.enable_bounds else 4)
                 target["labels"] = torch.as_tensor(cropped_labels, dtype=torch.int64)
                 return cropped_image, target
 
@@ -356,6 +446,9 @@ class RandomErasingWithTarget(object):
         img = self.transform(img)
 
         return img, target
+    
+    def __repr__(self):
+        return f"{self.__class__.__name__}({', '.join([f'{k}={v!r}' for k, v in self.__dict__.items() if not k.startswith('_')])})"
 
 class ToPILImageWithTarget(object):
     def __init__(self):
@@ -365,6 +458,9 @@ class ToPILImageWithTarget(object):
         img = self.transform(img)
 
         return img, target
+    
+    def __repr__(self):
+        return f"{self.__class__.__name__}({', '.join([f'{k}={v!r}' for k, v in self.__dict__.items() if not k.startswith('_')])})"
 
 class RandomDilation(object):
     def __init__(self, probability=0.5, size=3):
@@ -393,10 +489,11 @@ class RandomErosion(object):
         return img, target
 
 class RandomResize(object):
-    def __init__(self, min_min_size, max_min_size, max_max_size):
+    def __init__(self, min_min_size, max_min_size, max_max_size, enable_bounds):
         self.min_min_size = min_min_size
         self.max_min_size = max_min_size
         self.max_max_size = max_max_size
+        self.enable_bounds = enable_bounds
 
     def __call__(self, image, target):
         width, height = image.size
@@ -411,16 +508,18 @@ class RandomResize(object):
         resized_bboxes = []
         for bbox in target["boxes"]:
             bbox = [scale*elem for elem in bbox]
+            assert len(bbox) == (8 if self.enable_bounds else 4)
             resized_bboxes.append(bbox)
 
-        target["boxes"] = torch.as_tensor(resized_bboxes, dtype=torch.float32)
+        target["boxes"] = torch.as_tensor(resized_bboxes, dtype=torch.float32).reshape(-1, 8 if self.enable_bounds else 4)
         
         return resized_image, target
 
 class RandomMaxResize(object):
-    def __init__(self, min_max_size, max_max_size):
+    def __init__(self, min_max_size, max_max_size, enable_bounds):
         self.min_max_size = min_max_size
         self.max_max_size = max_max_size
+        self.enable_bounds = enable_bounds
 
     def __call__(self, image, target):
         width, height = image.size
@@ -433,15 +532,18 @@ class RandomMaxResize(object):
             bbox = [scale*elem for elem in bbox]
             resized_bboxes.append(bbox)
 
-        target["boxes"] = torch.as_tensor(resized_bboxes, dtype=torch.float32)
+        target["boxes"] = torch.as_tensor(resized_bboxes, dtype=torch.float32).reshape(-1, 8 if self.enable_bounds else 4)
         
         return resized_image, target
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}({', '.join([f'{k}={v!r}' for k, v in self.__dict__.items() if not k.startswith('_')])})"
 
-normalize = R.Compose([
-    R.ToTensor(),
-    R.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-])
+def normalize(enable_bounds):
+    return R.Compose([
+        R.ToTensor(),
+        R.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225], enable_bounds)
+        ])
 
 random_erasing = R.Compose([
     R.ToTensor(),
@@ -457,40 +559,40 @@ random_erasing = R.Compose([
 ])
 
 
-def get_structure_transform(image_set):
+def get_structure_transform(image_set, enable_bounds):
     """
     returns the appropriate transforms for structure recognition.
     """
 
     if image_set == 'train':
         return R.Compose([
-            R.RandomSelect(TightAnnotationCrop([0], 30, 30, 30, 30),
-                           TightAnnotationCrop([0], 10, 10, 10, 10),
+            R.RandomSelect(TightAnnotationCrop([0], 30, 30, 30, 30, enable_bounds),
+                           TightAnnotationCrop([0], 10, 10, 10, 10, enable_bounds),
                            p=0.5),
-            RandomMaxResize(900, 1100), random_erasing, normalize
+            RandomMaxResize(900, 1100, enable_bounds), random_erasing, normalize(enable_bounds)
         ])
 
     if image_set == 'val':
-        return R.Compose([RandomMaxResize(1000, 1000), normalize])
+        return R.Compose([RandomMaxResize(1000, 1000, enable_bounds), normalize(enable_bounds)])
 
     raise ValueError(f'unknown {image_set}')
 
 
-def get_detection_transform(image_set):
+def get_detection_transform(image_set, enable_bounds):
     """
     returns the appropriate transforms for table detection.
     """
 
     if image_set == 'train':
         return R.Compose([
-            R.RandomSelect(TightAnnotationCrop([0, 1], 100, 150, 100, 150),
-                           RandomPercentageCrop(1, 0.1, 0.1, 0.1, 0.1),
+            R.RandomSelect(TightAnnotationCrop([0, 1], 100, 150, 100, 150, enable_bounds),
+                           RandomPercentageCrop(1, 0.1, 0.1, 0.1, 0.1, enable_bounds),
                            p=0.2),
-            RandomMaxResize(704, 896), normalize
+            RandomMaxResize(704, 896, enable_bounds), normalize(enable_bounds)
         ])
 
     if image_set == 'val':
-        return R.Compose([RandomMaxResize(800, 800), normalize])
+        return R.Compose([RandomMaxResize(800, 800, enable_bounds), normalize(enable_bounds)])
 
     raise ValueError(f'unknown {image_set}')
 
@@ -498,11 +600,36 @@ def get_detection_transform(image_set):
 def _isArrayLike(obj):
     return hasattr(obj, '__iter__') and hasattr(obj, '__len__')
 
+def compute_area(bboxes):
+    # Why does the original code not do the subtraction_
+    # bboxes[:, 2] * bboxes[:, 3] # COCO area
+    return (bboxes[:, 2] - bboxes[:, 0]) * (bboxes[:, 3] - bboxes[:, 1])
+
+def compute_area_with_bounds(bboxes):
+    # print("bboxes: {}".format(bboxes))
+    area_inside = compute_area(bboxes[:, :4])
+    present_inside = box_ops.is_present(bboxes[:, :4])
+    area_inside[~present_inside] = 0
+    area_outside = compute_area(bboxes[:, 4:])
+    present_outside = box_ops.is_present(bboxes[:, 4:])
+    area_outside[~present_outside] = 0
+    # print("area_inside: {}".format(area_inside))
+    # print("area_outside: {}".format(area_outside))
+    # print("torch.stack((area_inside, area_outside)): {}".format(
+    #     torch.stack((area_inside, area_outside))))
+    # print("torch.max(torch.stack((area_inside, area_outside)), dim=0): {}".format(
+    #     torch.max(torch.stack((area_inside, area_outside)), dim=0)
+    # ))
+    return torch.max(torch.stack((area_inside, area_outside)), dim=0)
+
+def box_xyxy_to_xywh(bbox):
+    return [bbox[0], bbox[1], bbox[2] - bbox[0], bbox[3] - bbox[1]]
+
 
 class PDFTablesDataset(torch.utils.data.Dataset):
-    def __init__(self, root, transforms=None, max_size=None, do_crop=True, make_coco=False,
+    def __init__(self, root, transforms, max_size=None, do_crop=True, make_coco=False,
                  include_eval=False, max_neg=None, negatives_root=None, xml_fileset="filelist.txt",
-                image_extension='.png', class_map=None):
+                image_extension='.png', class_map=None, enable_bounds=False):
         self.root = root
         self.transforms = transforms
         self.do_crop=do_crop
@@ -513,23 +640,24 @@ class PDFTablesDataset(torch.utils.data.Dataset):
         self.class_list = list(class_map)
         self.class_set = set(class_map.values())
         self.class_set.remove(class_map['no object'])
+        self.enable_bounds = enable_bounds
 
-
+        print(os.path.join(os.path.dirname(root), xml_fileset))
         try:
-            with open(os.path.join(root, "..", xml_fileset), 'r') as file:
+            with open(os.path.join(os.path.dirname(root), xml_fileset), 'r') as file:
                 lines = file.readlines()
                 lines = [l.split('/')[-1] for l in lines]
         except:
             lines = os.listdir(root)
         xml_page_ids = set([f.strip().replace(".xml", "") for f in lines if f.strip().endswith(".xml")])
             
-        image_directory = os.path.join(root, "..", "images")
+        image_directory = os.path.join(os.path.dirname(root), "images")
         try:
             with open(os.path.join(image_directory, "filelist.txt"), 'r') as file:
                 lines = file.readlines()
         except:
             lines = os.listdir(image_directory)
-        png_page_ids = set([f.strip().replace(self.image_extension, "") for f in lines if f.strip().endswith(self.image_extension)])
+        png_page_ids = {root for root, ext in (os.path.splitext(f.strip()) for f in lines) if ext == self.image_extension}
         
         self.page_ids = sorted(xml_page_ids.intersection(png_page_ids))
         if not max_size is None:
@@ -557,17 +685,26 @@ class PDFTablesDataset(torch.utils.data.Dataset):
             ann_id = 0
             for image_id, page_id in enumerate(self.page_ids):
                 annot_path = os.path.join(self.root, page_id + ".xml")
-                bboxes, labels = read_pascal_voc(annot_path, class_map=self.class_map)
+                bboxes, labels = read_pascal_voc(annot_path, class_map=self.class_map, enable_bounds=self.enable_bounds)
 
                 # Reduce class set
                 keep_indices = [idx for idx, label in enumerate(labels) if label in self.class_set]
                 bboxes = [bboxes[idx] for idx in keep_indices]
                 labels = [labels[idx] for idx in keep_indices]
 
-                for bbox, label in zip(bboxes, labels):
-                    ann = {'area': (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]),
+                torch_boxes = (
+                    torch.as_tensor(data=bboxes, dtype=torch.float32) if bboxes
+                    else torch.empty((0, 8 if enable_bounds else 4))
+                )
+                if self.enable_bounds:
+                    areas, is_outside = compute_area_with_bounds(torch_boxes)
+                else:
+                    areas = compute_area(torch_boxes)
+
+                for i, (bbox, label) in enumerate(zip(bboxes, labels)):
+                    ann = {'area': areas[i].item(),
                            'iscrowd': 0,
-                           'bbox': [bbox[0], bbox[1], bbox[2] - bbox[0], bbox[3] - bbox[1]],
+                           'bbox': box_xyxy_to_xywh(bbox[is_outside[i].item() * 4:][:4] if enable_bounds else bbox),
                            'category_id': label,
                            'image_id': image_id,
                            'id': ann_id,
@@ -613,14 +750,24 @@ class PDFTablesDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         # load images ad masks
         page_id = self.page_ids[idx]
-        img_path = os.path.join(self.root, "..", "images", page_id + self.image_extension)
+        img_path = os.path.join(os.path.dirname(self.root), "images", page_id + self.image_extension)
         annot_path = os.path.join(self.root, page_id + ".xml")
         
-        img = Image.open(img_path).convert("RGB")
+        try:
+            img = Image.open(img_path)
+        except os.error as e:
+            print("Error reading file: {}".format(img_path))
+            raise e
+        try:
+            img = img.convert("RGB")
+        except os.error as e:
+            print("Error converting file: {}".format(img_path))
+            raise e
+        
         w, h = img.size
         
-        if self.types[idx] == 1:        
-            bboxes, labels = read_pascal_voc(annot_path, class_map=self.class_map)
+        if self.types[idx] == 1:
+            bboxes, labels = read_pascal_voc(annot_path, class_map=self.class_map, enable_bounds=self.enable_bounds)
 
             # Reduce class set
             keep_indices = [idx for idx, label in enumerate(labels) if label in self.class_set]
@@ -633,20 +780,22 @@ class PDFTablesDataset(torch.utils.data.Dataset):
                 labels = torch.as_tensor(labels, dtype=torch.int64)
             else:
                 # Not clear if it's necessary to force the shape of bboxes to be (0, 4)
-                bboxes = torch.empty((0, 4), dtype=torch.float32)
+                bboxes = torch.empty((0, 8 if self.enable_bounds else 4), dtype=torch.float32)
                 labels = torch.empty((0,), dtype=torch.int64)
         else:
-            bboxes = torch.empty((0, 4), dtype=torch.float32)
+            bboxes = torch.empty((0, 8 if self.enable_bounds else 4), dtype=torch.float32)
             labels = torch.empty((0,), dtype=torch.int64)
 
         num_objs = bboxes.shape[0]
 
         # Create target
         target = {}
+        assert(bboxes.shape[-1] == (8 if self.enable_bounds else 4)), bboxes.shape
         target["boxes"] = bboxes
         target["labels"] = labels
         target["image_id"] = torch.as_tensor([idx])
-        target["area"] = bboxes[:, 2] * bboxes[:, 3] # COCO area
+        target["area"] = compute_area_with_bounds(bboxes)[0] if self.enable_bounds else compute_area(bboxes)
+        # Warning: why did the original code ignore the top-left corner?
         target["iscrowd"] = torch.zeros((num_objs,), dtype=torch.int64)
         target["orig_size"] = torch.as_tensor([int(h), int(w)])
         target["size"] = torch.as_tensor([int(h), int(w)])

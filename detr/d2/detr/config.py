@@ -17,6 +17,7 @@ def add_detr_config(cfg):
     cfg.MODEL.DETR.GIOU_WEIGHT = 2.0
     cfg.MODEL.DETR.L1_WEIGHT = 5.0
     cfg.MODEL.DETR.DEEP_SUPERVISION = True
+    cfg.MODEL.DETR.ENABLE_BOUNDS = True
     cfg.MODEL.DETR.NO_OBJECT_WEIGHT = 0.1
 
     # TRANSFORMER
