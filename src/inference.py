@@ -697,8 +697,16 @@ class TableExtractionPipeline(object):
             print("Detection model initialized.")
 
             if not det_model_path is None:
-                self.det_model.load_state_dict(torch.load(det_model_path,
-                                                     map_location=torch.device(det_device)))
+                loaded_state_dict = torch.load(det_model_path, 
+                                               map_location=torch.device(det_device))
+                model_state_dict = self.det_model.state_dict()
+                pretrained_dict = {
+                    k: v
+                    for k, v in loaded_state_dict.items()
+                    if k in model_state_dict and model_state_dict[k].shape == v.shape
+                }
+                model_state_dict.update(pretrained_dict)
+                self.det_model.load_state_dict(model_state_dict, strict=True)
                 self.det_model.to(det_device)
                 self.det_model.eval()
                 print("Detection model weights loaded.")
@@ -714,8 +722,16 @@ class TableExtractionPipeline(object):
             print("Structure model initialized.")
 
             if not str_model_path is None:
-                self.str_model.load_state_dict(torch.load(str_model_path,
-                                                     map_location=torch.device(str_device)))
+                loaded_state_dict = torch.load(str_model_path,
+                                                     map_location=torch.device(str_device))
+                model_state_dict = self.str_model.state_dict()
+                pretrained_dict = {
+                    k: v
+                    for k, v in loaded_state_dict.items()
+                    if k in model_state_dict and model_state_dict[k].shape == v.shape
+                }
+                model_state_dict.update(pretrained_dict)
+                self.str_model.load_state_dict(model_state_dict, strict=True)
                 self.str_model.to(str_device)
                 self.str_model.eval()
                 print("Structure model weights loaded.")
